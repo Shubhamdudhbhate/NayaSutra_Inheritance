@@ -163,16 +163,34 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
     const roleCategory = profile.role_category as RoleCategory;
     const role = mapRoleCategoryToCourtRole(roleCategory);
 
+    // Map role category to display title
+    const getTitleByRole = (roleCategory: string): string => {
+      switch (roleCategory?.toLowerCase()) {
+        case "judiciary":
+        case "judge":
+          return "Presiding Judge";
+        case "lawyer":
+        case "legal_practitioner":
+          return "Lawyer";
+        case "clerk":
+        case "court_staff":
+          return "Court Clerk";
+        case "police":
+        case "police_officer":
+          return "Police Officer";
+        case "public_party":
+        case "user":
+        default:
+          return "Observer";
+      }
+    };
+
     return {
       id: profile.id,
       name: profile.full_name,
       role,
       roleCategory,
-      title: roleCategory === "judiciary"
-        ? "Presiding Judge"
-        : roleCategory === "legal_practitioner"
-        ? "Legal Practitioner"
-        : "Observer",
+      title: getTitleByRole(roleCategory),
     };
   }, [profile]);
 

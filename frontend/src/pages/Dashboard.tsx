@@ -1,24 +1,15 @@
-import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
 import { useRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { JudiciaryDashboard } from "@/components/dashboard/JudiciaryDashboard";
 import { ClerkDashboard } from "@/components/dashboard/clerk/ClerkDashboard";
 import { PublicDashboard } from "@/components/dashboard/PublicDashboard";
+import { PoliceDashboard } from "@/components/dashboard/PoliceDashboard";
 import ProfessionalDashboard from "@/components/ProfessionalDashboard";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 const Dashboard = () => {
-  const navigate = useNavigate();
   const { currentUser } = useRole();
   const { profile } = useAuth();
-
-  // Route police to police dashboard
-  useEffect(() => {
-    if (profile?.role_category === "police") {
-      navigate("/police/dashboard", { replace: true });
-    }
-  }, [profile?.role_category, navigate]);
 
   if (!currentUser) {
     return (
@@ -26,10 +17,6 @@ const Dashboard = () => {
         <LoadingSpinner size={48} />
       </div>
     );
-  }
-
-  if (profile?.role_category === "police") {
-    return null;
   }
 
   // Show professional dashboard for new roles
@@ -43,6 +30,8 @@ const Dashboard = () => {
       return <JudiciaryDashboard />;
     case "clerk":
       return <ClerkDashboard />;
+    case "police":
+      return <PoliceDashboard />;
     case "observer":
       return <PublicDashboard />;
     default:

@@ -32,10 +32,8 @@ import CourtCalendar from "./pages/CourtCalendar";
 import Analytics from "./pages/Analytics";
 import SystemHealth from "./pages/SystemHealth";
 import NotFound from "./pages/NotFound";
-// Police pages
-import PoliceDashboard from "./pages/police/Dashboard";
-import NewFIR from "./pages/police/NewFIR";
-import FIRDetails from "./pages/police/FIRDetails";
+import NewFIR from "./pages/NewFIR";
+import FIRDetails from "./pages/FIRDetails";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,7 +67,7 @@ const GlassLayout = () => {
 
 // 1. Protected Route: Checks LocalStorage ("The Wristband")
 // This ignores Supabase session status and trusts your manual token.
-const ProtectedRoute = forwardRef<HTMLDivElement>((_, ref) => {
+const ProtectedRoute = forwardRef<HTMLDivElement>(() => {
   const token = localStorage.getItem("auth_token");
   const isAuthenticated = !!token; // True if token exists
 
@@ -80,35 +78,18 @@ ProtectedRoute.displayName = "ProtectedRoute";
 
 // 2. Public Route: Redirects to Dashboard if token exists
 // Prevents logged-in users from seeing the Landing/Auth page
-const PublicRoute = forwardRef<HTMLDivElement>((_, ref) => {
+const PublicRoute = forwardRef<HTMLDivElement>(() => {
   const token = localStorage.getItem("auth_token");
   const isAuthenticated = !!token;
 
   if (isAuthenticated) {
-    // Check role to decide destination
-    const role = localStorage.getItem("user_role") || "";
-    
-    // Normalize role string just in case
-    if (role.toLowerCase() === "police") {
-      return <Navigate to="/police/dashboard" replace />;
-    }
+    // All authenticated users go to main dashboard
     return <Navigate to="/dashboard" replace />;
   }
 
   return <Outlet />;
 });
 PublicRoute.displayName = "PublicRoute";
-
-// 3. Police Route: Checks 'user_role' in LocalStorage
-const PoliceProtected = () => {
-  const role = localStorage.getItem("user_role");
-  
-  if (role !== "police" && role !== "police_officer") {
-    // If user is not police (e.g. Judge), send them to main dashboard
-    return <Navigate to="/dashboard" replace />;
-  }
-  return <Outlet />;
-};
 
 // --- ROUTES CONFIGURATION ---
 
@@ -134,16 +115,8 @@ const routes: RouteObject[] = [
       { path: "/courts/:courtId/sections", element: <Sections /> },
       { path: "/sections/:sectionId/blocks", element: <CaseBlocks /> },
       { path: "/cases/:id", element: <CaseDetails /> },
-      {
-        path: "/police",
-        element: <PoliceProtected />,
-        children: [
-          { path: "", element: <Navigate to="dashboard" replace /> },
-          { path: "dashboard", element: <PoliceDashboard /> },
-          { path: "new-fir", element: <NewFIR /> },
-          { path: "firs/:id", element: <FIRDetails /> },
-        ],
-      },
+      { path: "/police/new-fir", element: <NewFIR /> },
+      { path: "/police/firs/:id", element: <FIRDetails /> },
     ],
   },
   { path: "/login", element: <Navigate to="/auth" replace /> },

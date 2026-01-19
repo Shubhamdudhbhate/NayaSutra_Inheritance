@@ -6,11 +6,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, ArrowLeft, FileText, AlertCircle } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 
 const NewFIR = () => {
   const [loading, setLoading] = useState(false);
-  const { profile } = useAuth();
   const [form, setForm] = useState<any>({
     fir_number: "",
     police_station: "",
@@ -78,7 +76,7 @@ const NewFIR = () => {
         >
           <Button
             variant="ghost"
-            onClick={() => navigate("/police/dashboard")}
+            onClick={() => navigate("/dashboard")}
             className="mb-4 text-slate-400 hover:text-slate-200"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -352,7 +350,7 @@ const NewFIR = () => {
               </Button>
               <Button
                 type="button"
-                onClick={() => navigate("/police/dashboard")}
+                onClick={() => navigate("/dashboard")}
                 variant="outline"
                 className="flex-1 border-slate-600 hover:border-slate-400 text-slate-200 hover:text-white"
               >
