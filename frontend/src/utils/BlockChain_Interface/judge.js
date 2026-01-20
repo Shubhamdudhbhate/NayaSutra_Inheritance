@@ -14,6 +14,7 @@ const JUDGE_ABI = [
     "function getNextSessionDetails(uint256 _caseId) view returns (tuple(uint256 sessionId, uint256 scheduledDate, string description, bool isConcluded))",
     "function getSessionDetails(uint256 _caseId, uint256 _sessionId) view returns (tuple(uint256 caseId, uint256 sessionId, string ipfsCid, bool isAdjourned, uint256 startTimestamp, uint256 endTimestamp))",
     "function getCaseSigners(uint256 _caseId) view returns (address clerk, address judge, address defence, address prosecution)"
+
 ];
 
 // --- Internal Helper ---

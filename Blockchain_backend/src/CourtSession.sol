@@ -14,7 +14,7 @@ contract CourtSession {
 
     struct Case {
         uint256 id;
-        uint256 linkedFirId;
+        string linkedFirId;
         string title;
         string accused;
         string filer;
@@ -27,12 +27,14 @@ contract CourtSession {
         string metaData;
         address assignedClerk;
     }
+
     struct SessionDetails {
         uint256 sessionId;
         uint256 scheduledDate;
         string description;
         bool isConcluded;
     }
+
     struct CurrSession {
         uint256 caseId;
         uint256 sessionId;
@@ -49,14 +51,12 @@ contract CourtSession {
     mapping(uint256 => Case) public cases;
     mapping(uint256 => address) public assignedJudgeMap;
     mapping(uint256 => mapping(string => address)) public isAssignedLawyer;
-    mapping(uint256 => mapping(uint256 => SessionDetails)) public NextSessions;
-    mapping(uint256 => mapping(uint256 => CurrSession)) public Sessions;
 
-    event CaseCreated(
-        uint256 indexed caseId,
-        string title,
-        uint256 linkedFirId
-    );
+    // Fixed naming convention (camelCase)
+    mapping(uint256 => mapping(uint256 => SessionDetails)) public nextSessions;
+    mapping(uint256 => mapping(uint256 => CurrSession)) public sessions;
+
+    event CaseCreated(uint256 indexed caseId, string title, string linkedFirId);
     event CaseStatusChanged(uint256 indexed caseId, CaseStatus status);
     event JudgeAssigned(uint256 indexed caseId, address judge);
     event LawyerAssigned(uint256 indexed caseId, address lawyer, string role);
@@ -71,17 +71,26 @@ contract CourtSession {
         string ipfsCid
     );
 
+    // --- OPTIMIZED MODIFIERS ---
     modifier onlyClerk() {
-        require(
-            accessControl.hasRole(accessControl.CLERK_ROLE(), msg.sender),
-            "Only Clerk"
-        );
+        _checkClerk();
         _;
     }
 
     modifier onlyAssignedJudge(uint256 _caseId) {
-        require(cases[_caseId].assignedJudge == msg.sender, "Not the Judge");
+        _checkAssignedJudge(_caseId);
         _;
+    }
+
+    function _checkClerk() internal view {
+        require(
+            accessControl.hasRole(accessControl.CLERK_ROLE(), msg.sender),
+            "Only Clerk"
+        );
+    }
+
+    function _checkAssignedJudge(uint256 _caseId) internal view {
+        require(cases[_caseId].assignedJudge == msg.sender, "Not the Judge");
     }
 
     constructor(address _accessControl, address _firRegistry) {
@@ -91,21 +100,22 @@ contract CourtSession {
 
     function createCase(
         string memory _title,
-        uint256 _firId,
+        string memory _firId,
         string memory _metaData
     ) external onlyClerk returns (uint256) {
         _caseIds++;
         uint256 newId = _caseIds;
-        if (_firId != 0) {
-            firRegistry.markForwarded(_firId, newId);
-        }
+
         string memory _accused = "";
         string memory _filer = "";
-        if (_firId != 0) {
+
+        if (bytes(_firId).length > 0) {
+            firRegistry.markForwarded(_firId, newId);
             (, , _accused, _filer, , ) = FIRRegistry(address(firRegistry)).firs(
                 _firId
             );
         }
+
         cases[newId] = Case({
             id: newId,
             linkedFirId: _firId,
@@ -160,7 +170,7 @@ contract CourtSession {
         string memory _desc
     ) external onlyAssignedJudge(_caseId) {
         uint256 sId = cases[_caseId].nextSessionId;
-        NextSessions[_caseId][sId] = SessionDetails({
+        nextSessions[_caseId][sId] = SessionDetails({
             sessionId: sId,
             scheduledDate: _date,
             description: _desc,
@@ -171,12 +181,41 @@ contract CourtSession {
         emit NextSessionscheduled(_caseId, sId, _date);
     }
 
-    function setCaseStatus(
+    function startSession(uint256 _caseId) external onlyAssignedJudge(_caseId) {
+        require(cases[_caseId].nextSessionId > 0, "No sessions scheduled");
+        uint256 sId = cases[_caseId].nextSessionId - 1;
+        sessions[_caseId][sId] = CurrSession({
+            caseId: _caseId,
+            sessionId: sId,
+            ipfsCid: "",
+            isAdjourned: false,
+            startTimestamp: block.timestamp,
+            endTimestamp: 0
+        });
+    }
+
+    function endSession(
         uint256 _caseId,
-        CaseStatus _status
+        string memory _ipfsCid,
+        bool _isAdjourned
     ) external onlyAssignedJudge(_caseId) {
-        cases[_caseId].status = _status;
-        emit CaseStatusChanged(_caseId, _status);
+        require(cases[_caseId].nextSessionId > 0, "No sessions");
+        uint256 sId = cases[_caseId].nextSessionId - 1;
+        CurrSession storage currentSession = sessions[_caseId][sId];
+        require(currentSession.startTimestamp != 0, "Session not started");
+
+        currentSession.ipfsCid = _ipfsCid;
+        currentSession.isAdjourned = _isAdjourned;
+        currentSession.endTimestamp = block.timestamp;
+
+        emit SessionPublished(_caseId, sId, _ipfsCid);
+    }
+
+    function getSessionDetails(
+        uint256 _caseId,
+        uint256 _sessionId
+    ) external view returns (CurrSession memory) {
+        return sessions[_caseId][_sessionId];
     }
 
     function getCaseSigners(
@@ -199,55 +238,17 @@ contract CourtSession {
         );
     }
 
-    function getAssignedJudge(uint256 _caseId) external view returns (address) {
-        return cases[_caseId].assignedJudge;
-    }
-
-    function isCaseActive(uint256 _caseId) external view returns (bool) {
-        return cases[_caseId].status != CaseStatus.CLOSED;
-    }
-
     function getNextSessionDetails(
         uint256 _caseId
     ) external view returns (SessionDetails memory) {
+        // Safe check to prevent underflow if no sessions exist
+        if (cases[_caseId].nextSessionId <= 1) {
+            return SessionDetails(0, 0, "", false); // Return empty if no session scheduled
+        }
+
+        // Logic: The "next" session is the one currently scheduled but not yet happened
+        // or the last one added.
         uint256 sessionId = cases[_caseId].nextSessionId - 1;
-        return NextSessions[_caseId][sessionId];
-    }
-
-    function startSession(uint256 _caseId) external onlyAssignedJudge(_caseId) {
-        require(cases[_caseId].nextSessionId > 0, "No sessions scheduled");
-        uint256 sId = cases[_caseId].nextSessionId - 1;
-        Sessions[_caseId][sId] = CurrSession({
-            caseId: _caseId,
-            sessionId: sId,
-            ipfsCid: "",
-            isAdjourned: false,
-            startTimestamp: block.timestamp,
-            endTimestamp: 0
-        });
-    }
-
-    function endSession(
-        uint256 _caseId,
-        string memory _ipfsCid,
-        bool _isAdjourned
-    ) external onlyAssignedJudge(_caseId) {
-        require(cases[_caseId].nextSessionId > 0, "No sessions");
-        uint256 sId = cases[_caseId].nextSessionId - 1;
-        CurrSession storage currentSession = Sessions[_caseId][sId];
-        require(currentSession.startTimestamp != 0, "Session not started");
-
-        currentSession.ipfsCid = _ipfsCid;
-        currentSession.isAdjourned = _isAdjourned;
-        currentSession.endTimestamp = block.timestamp;
-
-        emit SessionPublished(_caseId, sId, _ipfsCid);
-    }
-
-    function getSessionDetails(
-        uint256 _caseId,
-        uint256 _sessionId
-    ) external view returns (CurrSession memory) {
-        return Sessions[_caseId][_sessionId];
+        return nextSessions[_caseId][sessionId];
     }
 }

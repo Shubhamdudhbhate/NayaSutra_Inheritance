@@ -66,3 +66,29 @@ export const uploadInvestigationFile = async (firId: string, file: File, fileTyp
   if (error) throw error;
   return data as InvestigationFile;
 };
+// Add this to src/services/policeService.ts
+
+export const updateFirTxHash = async (firDbId: string, txHash: string) => {
+  const { data, error } = await supabase
+    .from('firs')
+    .update({ 
+        blockchain_tx_hash: txHash,
+        is_on_chain: true 
+    } as any)
+    .eq('id', firDbId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+export const getFIRByNumber = async (firNumber: string): Promise<FIR | null> => {
+  const { data, error } = await supabase
+    .from('firs')
+    .select('*')
+    .eq('fir_number', firNumber)
+    .maybeSingle(); // Returns null if not found, instead of throwing error
+
+  if (error) throw error;
+  return data as FIR;
+};

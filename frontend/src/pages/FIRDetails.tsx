@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getFIRById, listInvestigationFiles } from "@/services/policeService";
+import { getFIRByNumber, listInvestigationFiles } from "@/services/policeService";
 import AddSupplementModal from "@/components/police/AddSupplementModal";
 import { FIR, InvestigationFile } from "@/types/case";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -18,7 +18,7 @@ const FIRDetails = () => {
     let mounted = true;
     const load = async () => {
       try {
-        const f = await getFIRById(id);
+        const f = await getFIRByNumber("MH/2026/23424/2222");
         const fl = await listInvestigationFiles(id);
         if (!mounted) return;
         setFir(f);
