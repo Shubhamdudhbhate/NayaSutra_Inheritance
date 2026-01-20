@@ -35,8 +35,6 @@ contract EvidenceStaging is EIP712 {
         keccak256("UploadPermit(uint256 caseId,address witness,uint256 nonce)");
 
     CourtAccessControl public accessControl;
-    // CourtRecord public courtRecord; // REMOVED: Decoupled
-
     uint256 private _submissionIds;
     mapping(uint256 => Submission) public submissions;
     mapping(uint256 => mapping(address => bool)) public registeredParticipants;
@@ -53,20 +51,28 @@ contract EvidenceStaging is EIP712 {
         address reviewedBy
     );
 
+    // --- OPTIMIZED MODIFIERS ---
     modifier onlyJudge() {
-        require(accessControl.isJudge(msg.sender), "Caller is not a Judge");
+        _checkJudge();
         _;
     }
 
     modifier onlyClerk() {
+        _checkClerk();
+        _;
+    }
+
+    function _checkJudge() internal view {
+        require(accessControl.isJudge(msg.sender), "Caller is not a Judge");
+    }
+
+    function _checkClerk() internal view {
         require(
             accessControl.hasRole(accessControl.CLERK_ROLE(), msg.sender),
             "Caller is not a Clerk"
         );
-        _;
     }
 
-    // UPDATED CONSTRUCTOR: Removed CourtRecord address
     constructor(address _accessControl) EIP712("CourtEvidenceSystem", "1") {
         accessControl = CourtAccessControl(_accessControl);
     }
@@ -123,11 +129,8 @@ contract EvidenceStaging is EIP712 {
             submissions[_submissionId].status == Status.PENDING,
             "Already reviewed"
         );
-
         if (_accepted) {
             submissions[_submissionId].status = Status.ACCEPTED;
-            // NOTE: We no longer call courtRecord.attestEvidence.
-            // The frontend will query for Status.ACCEPTED items to build the Session JSON.
         } else {
             submissions[_submissionId].status = Status.REJECTED;
         }

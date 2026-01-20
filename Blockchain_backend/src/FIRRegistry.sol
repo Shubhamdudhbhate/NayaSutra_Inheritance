@@ -5,15 +5,15 @@ import "./CourtAccessControl.sol";
 
 contract FIRRegistry {
     struct Report {
-        string ipfsCid; // Encrypted PDF
-        bytes32 contentHash; // Integrity Check
+        string ipfsCid;
+        bytes32 contentHash;
         uint256 timestamp;
-        address filedBy; // Officer ID
-        bool isSupplementary; // True if it's an update
+        address filedBy;
+        bool isSupplementary;
     }
 
     struct FIR {
-        uint256 id;
+        string id;
         string stationId;
         string accused;
         string filer;
@@ -25,57 +25,59 @@ contract FIRRegistry {
 
     CourtAccessControl public accessControl;
 
-    uint256 private _firIds;
-    mapping(uint256 => FIR) public firs;
+    mapping(string => FIR) public firs;
     mapping(uint256 => Report) public allReports;
+    mapping(string => string[]) public firProofs;
+
     uint256 private _reportIds;
 
     event FIRFiled(
-        uint256 indexed firId,
+        string indexed firId,
         string stationId,
         string[] ipcSections
     );
-    event SupplementaryFiled(uint256 indexed firId, uint256 reportId);
-    event FIRForwarded(uint256 indexed firId, uint256 caseId);
+    event SupplementaryFiled(string indexed firId, uint256 reportId);
+    event FIRForwarded(string indexed firId, uint256 caseId);
+    event ProofAdded(string indexed firId, string url);
 
+    // --- OPTIMIZED MODIFIERS ---
     modifier onlyPolice() {
-        require(accessControl.isPolice(msg.sender), "Caller is not Police");
+        _checkPolice();
         _;
     }
 
-    modifier onlyClerk() {
-        require(
-            accessControl.hasRole(accessControl.CLERK_ROLE(), msg.sender),
-            "Caller is not Clerk"
-        );
+    modifier onlyCourtSession() {
+        _checkCourtSession();
         _;
     }
-    modifier onlyCourtSession() {
+
+    function _checkPolice() internal view {
+        require(accessControl.isPolice(msg.sender), "Caller is not Police");
+    }
+
+    function _checkCourtSession() internal view {
         require(
             accessControl.isCourtSytem(msg.sender),
             "Caller is not the valid Court Session"
         );
-        _;
     }
 
     constructor(address _accessControl) {
         accessControl = CourtAccessControl(_accessControl);
     }
 
-    // Step 2: Register FIR (Original)
-    //accused
-    //filer
+    // Keeping 'fileFIR' name to match Frontend Interface
     function fileFIR(
+        string calldata _firId, // Fixed naming warning
         string calldata _stationId,
-        string[] calldata _ipcSections, // <--- CHANGED: Array Input
+        string[] calldata _ipcSections,
         string calldata _ipfsCid,
         string calldata _accused,
         string calldata _filer,
-        address _filedBy,
         bytes32 _contentHash
-    ) external onlyPolice returns (uint256) {
-        _firIds++;
-        uint256 newFirId = _firIds;
+    ) external onlyPolice returns (string memory) {
+        require(bytes(firs[_firId].id).length == 0, "FIR ID already exists");
+
         _reportIds++;
         allReports[_reportIds] = Report({
             ipfsCid: _ipfsCid,
@@ -88,8 +90,8 @@ contract FIRRegistry {
         uint256[] memory initReports = new uint256[](1);
         initReports[0] = _reportIds;
 
-        firs[newFirId] = FIR({
-            id: newFirId,
+        firs[_firId] = FIR({
+            id: _firId,
             stationId: _stationId,
             accused: _accused,
             filer: _filer,
@@ -99,17 +101,16 @@ contract FIRRegistry {
             reportIndexes: initReports
         });
 
-        emit FIRFiled(newFirId, _stationId, _ipcSections);
-        return newFirId;
+        emit FIRFiled(_firId, _stationId, _ipcSections);
+        return _firId;
     }
 
-    // Step 4: Add Supplementary Report (Append-Only)
     function addSupplementaryReport(
-        uint256 _firId,
+        string calldata _firId,
         string calldata _ipfsCid,
         bytes32 _contentHash
     ) external onlyPolice {
-        require(firs[_firId].id != 0, "FIR does not exist");
+        require(bytes(firs[_firId].id).length != 0, "FIR does not exist");
         require(
             !firs[_firId].isForwarded,
             "Cannot update after forwarding to Court"
@@ -128,30 +129,49 @@ contract FIRRegistry {
         emit SupplementaryFiled(_firId, _reportIds);
     }
 
+    function addProofLink(
+        string calldata _firId,
+        string calldata _link
+    ) external onlyPolice {
+        require(bytes(firs[_firId].id).length != 0, "FIR does not exist");
+        require(!firs[_firId].isForwarded, "Cannot update after forwarding");
+
+        firProofs[_firId].push(_link);
+        emit ProofAdded(_firId, _link);
+    }
+
     function markForwarded(
-        uint256 _firId,
+        string calldata _firId,
         uint256 _caseId
     ) external onlyCourtSession {
-        require(firs[_firId].id != 0, "FIR does not exist");
+        require(bytes(firs[_firId].id).length != 0, "FIR does not exist");
         require(!firs[_firId].isForwarded, "Already forwarded");
 
         firs[_firId].isForwarded = true;
         emit FIRForwarded(_firId, _caseId);
     }
 
-    function getReportCount(uint256 _firId) external view returns (uint256) {
+    function getReportCount(
+        string calldata _firId
+    ) external view returns (uint256) {
         return firs[_firId].reportIndexes.length;
     }
 
     function getIpcSections(
-        uint256 _firId
+        string calldata _firId
     ) external view returns (string[] memory) {
         return firs[_firId].ipcSections;
     }
 
     function getallReportIds(
-        uint256 _firId
+        string calldata _firId
     ) external view returns (uint256[] memory) {
         return firs[_firId].reportIndexes;
+    }
+
+    function getFirProofs(
+        string calldata _firId
+    ) external view returns (string[] memory) {
+        return firProofs[_firId];
     }
 }

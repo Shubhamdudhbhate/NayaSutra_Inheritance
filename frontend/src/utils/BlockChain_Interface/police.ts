@@ -1,13 +1,23 @@
-import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.min.js";
+import { ethers } from "ethers";
+import { supabase } from '@/integrations/supabase/client';
 
+// Declare ethereum on window object
+import { MetaMaskInpageProvider } from "@metamask/providers";
+
+declare global {
+  interface Window {
+    ethereum?: MetaMaskInpageProvider;
+  }
+}
 // --- Configuration ---
-const FIR_REGISTRY_ADDR = ""; // TODO: Fill this after deployment
+// Access environment variables safely in Vite/React
+const FIR_REGISTRY_ADDR = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 
 const FIR_ABI = [
     // Writes
     "function fileFIR(string _fir_id, string _stationId, string[] _ipcSections, string _ipfsCid, string _accused, string _filer, bytes32 _contentHash) external returns (string)",
     "function addSupplementaryReport(string _firId, string _ipfsCid, bytes32 _contentHash) external",
-    "function addProofLink(string _firId, string _link) external", // NEW: Add Proof
+    "function addProofLink(string _firId, string _link) external",
 
     // Reads
     "function getReportCount(string _firId) view returns (uint256)",
@@ -15,17 +25,18 @@ const FIR_ABI = [
     "function firs(string _firId) view returns (string id, string stationId, string accused, string filer, string[] ipcSections, bool isForwarded, address filedBy, uint256[] reportIndexes)",
     "function allReports(uint256) view returns (string ipfsCid, bytes32 contentHash, uint256 timestamp, address filedBy, bool isSupplementary)",
     "function getallReportIds(string _firId) view returns (uint256[] memory)",
-    "function getFirProofs(string _firId) view returns (string[] memory)", // NEW: Get Proofs
+    "function getFirProofs(string _firId) view returns (string[] memory)",
 
     // Events
     "event FIRFiled(string indexed firId, string stationId, string[] ipcSections)",
     "event SupplementaryFiled(string indexed firId, uint256 reportId)",
-    "event ProofAdded(string indexed firId, string url)" // NEW: Proof Event
+    "event ProofAdded(string indexed firId, string url)"
 ];
 
 // --- Internal Helper: Get Contract ---
 const getContract = async (withSigner = false) => {
     if (!window.ethereum) throw new Error("MetaMask not found");
+    // Standard Ethers v6 provider
     const provider = new ethers.BrowserProvider(window.ethereum);
     const runner = withSigner ? await provider.getSigner() : provider;
     return new ethers.Contract(FIR_REGISTRY_ADDR, FIR_ABI, runner);
@@ -36,70 +47,62 @@ const getContract = async (withSigner = false) => {
 /**
  * Files a new FIR
  */
-export const fileFir = async (firId, stationId, ipcSections, accused, filer, contentHash) => {
+export const fileFir = async (
+    firId: string, 
+    stationId: string, 
+    ipcSections: string[], 
+    ipfsCid: string, 
+    accused: string, 
+    filer: string, 
+    contentHash: string
+): Promise<{ firId: string; txHash: string }> => { // <--- Changed Return Type
     try {
         const contract = await getContract(true);
-        const ipfsCid = "QmPlaceholderCidForDemo"; // In prod, upload PDF first
+        console.log(`Filing FIR with IPFS CID: ${ipfsCid}`);
 
+        // 1. Send Transaction
         const tx = await contract.fileFIR(
             firId,
             stationId,
             ipcSections,
-            ipfsCid,
+            ipfsCid, 
             accused,
             filer,
             contentHash
         );
 
-        console.log("Transaction pending...", tx.hash);
+        console.log("Transaction sent:", tx.hash);
+        
+        // 2. Wait for confirmation (Mining)
         const receipt = await tx.wait();
 
+        // 3. Find the Event to get the official ID
         const event = receipt.logs
-            .map(log => { try { return contract.interface.parseLog(log); } catch (e) { return null; } })
-            .find(e => e && e.name === "FIRFiled");
+            .map((log: any) => { try { return contract.interface.parseLog(log); } catch (e) { return null; } })
+            .find((e: any) => e && e.name === "FIRFiled");
 
         if (!event) throw new Error("FIRFiled event not found in receipt!");
 
         console.log("FIR Filed Successfully. ID:", event.args.firId);
-        return event.args.firId;
-    } catch (error) {
+
+        // 4. Return both ID and Hash
+        return { 
+            firId: event.args.firId, 
+            txHash: receipt.hash // or tx.hash
+        };
+
+    } catch (error: any) {
         console.error("fileFir Error:", error);
         throw error;
     }
 };
-
-/**
- * NEW: Adds a Cloud Proof Link to an existing FIR
- * @param {string} firId - The FIR ID (e.g., "MH-2024-001")
- * @param {string} cloudLink - The URL to the proof (e.g., Cloudinary URL)
- */
-export const addProofLink = async (firId, cloudLink) => {
-    try {
-        const contract = await getContract(true);
-        console.log(`Adding proof to FIR ${firId}...`);
-
-        const tx = await contract.addProofLink(firId, cloudLink);
-        console.log("Tx Sent:", tx.hash);
-
-        await tx.wait();
-        console.log("Proof added successfully.");
-        return tx.hash;
-    } catch (error) {
-        console.error("addProofLink Error:", error);
-        throw error;
-    }
-};
-
 /**
  * NEW: Fetches all proof links for an FIR
- * @param {string} firId 
- * @returns {string[]} Array of URLs
  */
-export const getFirProofs = async (firId) => {
+export const getFirProofs = async (firId: string): Promise<string[]> => {
     try {
         const contract = await getContract();
         const proofsProxy = await contract.getFirProofs(firId);
-        // Convert Ethers Proxy Array to Standard JS Array
         return Array.from(proofsProxy);
     } catch (error) {
         console.error("getFirProofs Error:", error);
@@ -110,13 +113,13 @@ export const getFirProofs = async (firId) => {
 /**
  * Adds a supplementary report to an existing FIR
  */
-export const addSupplementaryReport = async (firId, ipfsCid, contentHash) => {
+export const addSupplementaryReport = async (firId: string, ipfsCid: string, contentHash: string): Promise<void> => {
     try {
         const contract = await getContract(true);
         const tx = await contract.addSupplementaryReport(firId, ipfsCid, contentHash);
         await tx.wait();
         console.log(`Supplementary report added to FIR #${firId}`);
-    } catch (error) {
+    } catch (error: any) {
         console.error("addSupplementaryReport Error:", error);
         throw error;
     }
@@ -125,15 +128,13 @@ export const addSupplementaryReport = async (firId, ipfsCid, contentHash) => {
 /**
  * Fetches basic FIR details AND Proofs
  */
-export const getFirDetails = async (firId) => {
+export const getFirDetails = async (firId: string): Promise<any> => {
     try {
         const contract = await getContract();
 
-        // 1. Fetch Basic Data
         const data = await contract.firs(firId);
-        if (!data.id) return null; // FIR doesn't exist
+        if (!data.id) return null;
 
-        // 2. Fetch Proofs (New Logic)
         const proofsProxy = await contract.getFirProofs(firId);
         const proofsArray = Array.from(proofsProxy);
 
@@ -145,9 +146,9 @@ export const getFirDetails = async (firId) => {
             isForwarded: data.isForwarded,
             filedBy: data.filedBy,
             ipcSections: Array.from(data.ipcSections),
-            proofs: proofsArray // Include proofs in details object
+            proofs: proofsArray
         };
-    } catch (error) {
+    } catch (error: any) {
         console.error("getFirDetails Error:", error);
         throw error;
     }
@@ -156,7 +157,7 @@ export const getFirDetails = async (firId) => {
 /**
  * Fetches all reports associated with an FIR
  */
-export const getFirReports = async (firId) => {
+export const getFirReports = async (firId: string): Promise<any[]> => {
     try {
         const contract = await getContract();
         const reportIds = await contract.getallReportIds(firId);
@@ -173,24 +174,23 @@ export const getFirReports = async (firId) => {
             });
         }
         return reports;
-    } catch (error) {
+    } catch (error: any) {
         console.error("getFirReports Error:", error);
         return [];
     }
 };
 
-export const getAllReportDetails = async (firId) => {
+export const getAllReportDetails = async (firId: string): Promise<string[]> => {
     try {
         const contract = await getContract();
         const reportIds = await contract.getallReportIds(firId);
 
-        const reportPromises = reportIds.map(async (id) => {
+        const reportPromises = reportIds.map(async (id: any) => {
             const report = await contract.allReports(id);
             return report.ipfsCid;
         });
 
-        const allIpfsCids = await Promise.all(reportPromises);
-        return allIpfsCids;
+        return await Promise.all(reportPromises);
     } catch (error) {
         console.error("Error fetching report details:", error);
         return [];
@@ -200,10 +200,10 @@ export const getAllReportDetails = async (firId) => {
 /**
  * Real-time listener for new FIRs
  */
-export const listenForFirs = async (callback) => {
+export const listenForFirs = async (callback: (data: any) => void) => {
     const contract = await getContract();
 
-    const handler = (firId, stationId, ipcSections, event) => {
+    const handler = (firId: string, stationId: string, ipcSections: any[], event: any) => {
         callback({
             firId: firId,
             stationId,
@@ -216,20 +216,16 @@ export const listenForFirs = async (callback) => {
     return () => contract.off("FIRFiled", handler);
 };
 
-/**
- * NEW: Real-time listener for Proof Additions
- */
-export const listenForProofAdded = async (callback) => {
-    const contract = await getContract();
 
-    const handler = (firId, url, event) => {
-        callback({
-            firId: firId,
-            url: url,
-            txHash: event.log.transactionHash
-        });
-    };
+export const confirmFirOnChain = async (firId: string, txHash: string) => {
+    const { error } = await supabase
+        .from('firs')
+        .update({ 
+            is_on_chain: true,
+            blockchain_tx_hash: txHash,
+            status: 'Registered' // Ensure status is set
+        })
+        .eq('fir_number', firId); // Assuming fir_number matches the ID used on chain
 
-    contract.on("ProofAdded", handler);
-    return () => contract.off("ProofAdded", handler);
+    if (error) console.error("Error confirming FIR in DB:", error);
 };
