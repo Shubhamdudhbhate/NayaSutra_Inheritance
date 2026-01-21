@@ -29,7 +29,7 @@ export const createFIR = async (payload: Partial<FIR>): Promise<FIR> => {
 };
 
 export const getFIRById = async (id: string): Promise<FIR | null> => {
-  const { data, error } = await supabase.from('firs').select('*').eq('firs.id', id).maybeSingle();
+  const { data, error } = await supabase.from('firs').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
   return (data as FIR) ?? null;
 };
@@ -38,7 +38,7 @@ export const listInvestigationFiles = async (firId: string): Promise<Investigati
   const { data, error } = await supabase
     .from('investigation_files')
     .select('*')
-    .eq('investigation_files.fir_id', firId)
+    .eq('fir_id', firId)
     .order('uploaded_at', { ascending: true });
 
   if (error) throw error;

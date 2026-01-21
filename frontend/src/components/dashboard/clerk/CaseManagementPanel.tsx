@@ -147,41 +147,43 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
   };
 
   return (
-    <GlassCard className="p-6">
+    <GlassCard className="p-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Briefcase className="w-5 h-5 text-primary" />
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700">
+            <Briefcase className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold">Case Management</h2>
-            <p className="text-sm text-muted-foreground font-mono">
+            <h2 className="text-2xl font-semibold text-white">Case Management</h2>
+            <p className="text-slate-400 font-mono mt-1">
               {caseData.case_number}
             </p>
           </div>
         </div>
-        <Badge variant="outline" className="capitalize">
+        <Badge variant="outline" className="capitalize bg-white/5 border-white/10 text-slate-300">
           {caseData.status.replace("_", " ")}
         </Badge>
       </div>
 
       {/* Judge Assignment Section */}
-      <div className="mb-6 p-4 rounded-lg bg-secondary/30 border border-border">
-        <div className="flex items-center gap-2 mb-3">
-          <Gavel className="w-4 h-4 text-amber-500" />
-          <h3 className="font-medium">Judge Assignment</h3>
+      <div className="mb-8 p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-amber-500/10">
+            <Gavel className="w-5 h-5 text-amber-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-white">Judge Assignment</h3>
         </div>
         
-        <div className="flex gap-3">
+        <div className="flex gap-4">
           <select
             value={selectedJudge}
             onChange={(e) => setSelectedJudge(e.target.value)}
-            className="flex-1 h-10 px-3 rounded-md border border-input bg-background text-sm"
+            className="flex-1 h-12 px-4 rounded-lg border border-white/10 bg-white/5 text-white text-sm backdrop-blur-sm"
           >
-            <option value="">Select a judge...</option>
+            <option value="" className="bg-slate-800">Select a judge...</option>
             {judges.map((judge) => (
-              <option key={judge.id} value={judge.id}>
+              <option key={judge.id} value={judge.id} className="bg-slate-800">
                 {judge.full_name} {judge.unique_id ? `(${judge.unique_id})` : ""}
               </option>
             ))}
@@ -190,13 +192,13 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
           <Button
             onClick={handleAssignJudge}
             disabled={!selectedJudge || isAssigning}
-            size="sm"
+            className="h-12 px-6 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 shadow-lg shadow-amber-500/20"
           >
             {isAssigning ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
               <>
-                <Check className="w-4 h-4 mr-1" />
+                <Check className="w-5 h-5 mr-2" />
                 Assign
               </>
             )}
@@ -206,13 +208,13 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
             variant="outline"
             onClick={handleSendNotification}
             disabled={!caseData.assigned_judge_id || isSendingNotification}
-            size="sm"
+            className="h-12 px-6 border-white/10 bg-white/5 hover:bg-white/10 text-white"
           >
             {isSendingNotification ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
               <>
-                <Bell className="w-4 h-4 mr-1" />
+                <Bell className="w-5 h-5 mr-2" />
                 Notify
               </>
             )}
@@ -220,28 +222,28 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
         </div>
         
         {caseData.assigned_judge && (
-          <p className="text-sm text-muted-foreground mt-2">
-            Currently assigned: <span className="text-foreground font-medium">{caseData.assigned_judge.full_name}</span>
+          <p className="text-sm text-slate-400 mt-3">
+            Currently assigned: <span className="text-white font-medium">{caseData.assigned_judge.full_name}</span>
           </p>
         )}
       </div>
 
       {/* Tabs for different sections */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 mb-6">
-          <TabsTrigger value="conversation" className="text-xs sm:text-sm">
+        <TabsList className="grid grid-cols-4 mb-8 bg-white/5 border border-white/10 backdrop-blur-lg">
+          <TabsTrigger value="conversation" className="text-xs sm:text-sm data-[state=active]:bg-blue-600 data-[state=active]:text-white">
             <MessageSquare className="w-4 h-4 mr-1 hidden sm:inline" />
             Conversation
           </TabsTrigger>
-          <TabsTrigger value="statement" className="text-xs sm:text-sm">
+          <TabsTrigger value="statement" className="text-xs sm:text-sm data-[state=active]:bg-blue-600 data-[state=active]:text-white">
             <FileText className="w-4 h-4 mr-1 hidden sm:inline" />
             Statement
           </TabsTrigger>
-          <TabsTrigger value="documents" className="text-xs sm:text-sm">
+          <TabsTrigger value="documents" className="text-xs sm:text-sm data-[state=active]:bg-blue-600 data-[state=active]:text-white">
             <Upload className="w-4 h-4 mr-1 hidden sm:inline" />
             Documents
           </TabsTrigger>
-          <TabsTrigger value="signatures" className="text-xs sm:text-sm">
+          <TabsTrigger value="signatures" className="text-xs sm:text-sm data-[state=active]:bg-blue-600 data-[state=active]:text-white">
             <Check className="w-4 h-4 mr-1 hidden sm:inline" />
             Signatures
           </TabsTrigger>
@@ -270,27 +272,27 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
       </Tabs>
 
       {/* IPFS Submit Button */}
-      <div className="mt-6 pt-6 border-t border-border">
+      <div className="mt-8 pt-6 border-t border-white/10">
         <Button
-          className="w-full"
+          className="w-full h-12 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg shadow-green-500/20 text-white font-medium"
           size="lg"
           onClick={handleSendToIPFS}
           disabled={!isReadyForIPFS || isSendingToIPFS}
         >
           {isSendingToIPFS ? (
             <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
               Preparing for IPFS...
             </>
           ) : (
             <>
-              <Send className="w-4 h-4 mr-2" />
+              <Send className="w-5 h-5 mr-2" />
               {isReadyForIPFS ? "Send to IPFS" : "Collect All Signatures to Enable IPFS"}
             </>
           )}
         </Button>
         {!isReadyForIPFS && (
-          <p className="text-xs text-muted-foreground text-center mt-2">
+          <p className="text-xs text-slate-400 text-center mt-3">
             Requires signatures from Judge and both Lawyers
           </p>
         )}

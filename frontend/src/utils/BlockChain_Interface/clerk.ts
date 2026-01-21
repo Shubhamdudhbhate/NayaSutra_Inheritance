@@ -1,17 +1,22 @@
-import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.min.js";
+import { ethers } from "ethers";
+import { MetaMaskInpageProvider } from "@metamask/providers";
 
+declare global {
+  interface Window {
+    ethereum?: MetaMaskInpageProvider;
+  }
+}
 // --- Configuration ---
-const COURT_ADDR = ""; // TODO: Fill Address after deployment
+// Safely access environment variables
+const COURT_ADDR = import.meta.env.VITE_COURT_ADDR || "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
 const COURT_ABI = [
     // Writes
-    // Note: _firId is now string to match FIR Registry
     "function createCase(string _title, string _firId, string _metaData) external returns (uint256)",
     "function assignLawyer(uint256 _caseId, address _lawyer, string _role) external",
     "function assignJudge(uint256 _caseId, address _judge) external",
 
     // Reads
-    // Note: linkedFirId is now string
     "function cases(uint256) view returns (uint256 id, string linkedFirId, string title, string accused, string filer, uint8 status, address assignedJudge, uint256 creationDate, address defence, address prosecution, uint256 nextSessionId, string metaData, address assignedClerk)",
     "function getCaseSigners(uint256 _caseId) view returns (address clerk, address judge, address defence, address prosecution)",
 
@@ -19,8 +24,36 @@ const COURT_ABI = [
     "event CaseCreated(uint256 indexed caseId, string title, string linkedFirId)"
 ];
 
+// --- Types ---
+export interface CaseDetails {
+    id: string;
+    linkedFirId: string;
+    title: string;
+    accused: string;
+    filer: string;
+    status: number;
+    assignedJudge: string;
+    creationDate: string; // Formatted Date String
+    defence: string;
+    prosecution: string;
+    metaData: string;
+    assignedClerk: string;
+}
+
+export interface CaseParticipants {
+    clerk: string;
+    judge: string;
+    defence: string;
+    prosecution: string;
+}
+
+export interface CreateCaseResponse {
+    txHash: string;
+    caseId: string;
+}
+
 // --- Internal Helper ---
-const getClerkContract = async () => {
+const getClerkContract = async (): Promise<ethers.Contract> => {
     if (!window.ethereum) throw new Error("No Wallet Found");
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
@@ -35,7 +68,11 @@ const getClerkContract = async () => {
  * @param {string} firIdString - The FIR ID String (e.g. "MH-2024-001")
  * @param {string} metaData - Additional JSON metadata
  */
-export const clerkCreateCase = async (title, firIdString, metaData) => {
+export const clerkCreateCase = async (
+    title: string, 
+    firIdString: string, 
+    metaData: string
+): Promise<CreateCaseResponse> => {
     const contract = await getClerkContract();
 
     console.log(`Creating case linked to FIR ${firIdString}...`);
@@ -48,11 +85,11 @@ export const clerkCreateCase = async (title, firIdString, metaData) => {
 
     // Parse Logs to find Case ID
     const event = receipt.logs
-        .map(log => {
+        .map((log: any) => {
             try { return contract.interface.parseLog(log); }
             catch (e) { return null; }
         })
-        .find(parsed => parsed && parsed.name === "CaseCreated");
+        .find((parsed: any) => parsed && parsed.name === "CaseCreated");
 
     if (!event) throw new Error("CaseCreated event not found in receipt!");
 
@@ -65,7 +102,14 @@ export const clerkCreateCase = async (title, firIdString, metaData) => {
     };
 };
 
-export const clerkAssignLawyer = async (caseId, lawyerAddress, role) => {
+/**
+ * Assigns a lawyer to a specific case
+ */
+export const clerkAssignLawyer = async (
+    caseId: string | number, 
+    lawyerAddress: string, 
+    role: string
+): Promise<ethers.ContractTransactionReceipt | null> => {
     const contract = await getClerkContract();
 
     const tx = await contract.assignLawyer(
@@ -77,7 +121,13 @@ export const clerkAssignLawyer = async (caseId, lawyerAddress, role) => {
     return await tx.wait();
 };
 
-export const clerkAssignJudge = async (caseId, judgeAddress) => {
+/**
+ * Assigns a judge to a specific case
+ */
+export const clerkAssignJudge = async (
+    caseId: string | number, 
+    judgeAddress: string
+): Promise<ethers.ContractTransactionReceipt | null> => {
     const contract = await getClerkContract();
 
     const tx = await contract.assignJudge(BigInt(caseId), judgeAddress);
@@ -85,10 +135,14 @@ export const clerkAssignJudge = async (caseId, judgeAddress) => {
     return await tx.wait();
 };
 
-export const getCaseParticipants = async (caseId) => {
+/**
+ * Fetches the participants (Clerk, Judge, Lawyers) for a case
+ */
+export const getCaseParticipants = async (caseId: string | number): Promise<CaseParticipants> => {
     const contract = await getClerkContract();
 
     // Call getCaseSigners
+    // Ethers v6 returns a Result object (array-like) for multiple return values
     const signers = await contract.getCaseSigners(BigInt(caseId));
 
     return {
@@ -102,7 +156,7 @@ export const getCaseParticipants = async (caseId) => {
 /**
  * Fetches full details for a case
  */
-export const getCaseDetails = async (caseId) => {
+export const getCaseDetails = async (caseId: string | number): Promise<CaseDetails> => {
     const contract = await getClerkContract();
     const c = await contract.cases(BigInt(caseId));
 

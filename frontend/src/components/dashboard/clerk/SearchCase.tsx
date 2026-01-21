@@ -94,40 +94,40 @@ export const SearchCase = () => {
   };
 
   return (
-    <GlassCard className="p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 rounded-lg bg-primary/10">
-          <Search className="w-5 h-5 text-primary" />
+    <GlassCard className="p-8">
+      <div className="flex items-center gap-4 mb-8">
+        <div className="p-3 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700">
+          <Search className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold">Search Case</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-2xl font-semibold text-white">Search Case</h2>
+          <p className="text-slate-400 mt-1">
             Find an existing case by Case ID or FIR Number
           </p>
         </div>
       </div>
 
       {/* Search Input */}
-      <div className="flex gap-3 mb-6">
+      <div className="flex gap-4 mb-8">
         <div className="flex-1">
           <Input
             placeholder="Enter Case ID or FIR Number..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
-            className="h-11"
+            onKeyUp={handleKeyPress}
+            className="h-12 bg-white/5 border-white/10 backdrop-blur-sm text-white placeholder:text-slate-400"
           />
         </div>
         <Button
           onClick={handleSearch}
           disabled={isSearching || !searchQuery.trim()}
-          className="h-11 px-6"
+          className="h-12 px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/20"
         >
           {isSearching ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 className="w-5 h-5 animate-spin" />
           ) : (
             <>
-              <Search className="w-4 h-4 mr-2" />
+              <Search className="w-5 h-5 mr-2" />
               Search
             </>
           )}

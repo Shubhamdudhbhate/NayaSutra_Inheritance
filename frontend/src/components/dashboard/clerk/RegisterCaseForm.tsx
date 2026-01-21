@@ -2,49 +2,31 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { FilePlus, Loader2, Search as SearchIcon } from "lucide-react";
+import { FilePlus, Loader2, Search as SearchIcon, CheckCircle2, XCircle, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { GlassCard } from "@/components/layout/GlassWrapper";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+// --- IMPORTS ---
+import { clerkCreateCase } from "@/utils/BlockChain_Interface/clerk";
+// NOTE: Ensure this path matches where you keep your service
+import { getFIRByNumber } from "@/services/policeService"; 
+
 const caseFormSchema = z.object({
   title: z.string().min(3, "Case title must be at least 3 characters").max(200),
-  uniqueIdentifier: z.string().min(1, "FIR ID or Case Number is required").max(
-    50,
-  ),
+  firIdInput: z.string().optional(), // Made optional because logic handles validation
   caseType: z.enum(["criminal", "civil"]),
-  partyAName: z.string().min(2, "Party name must be at least 2 characters").max(
-    100,
-  ),
-  partyBName: z.string().min(2, "Party name must be at least 2 characters").max(
-    100,
-  ),
+  partyAName: z.string().min(2, "Party name must be at least 2 characters").max(100),
+  partyBName: z.string().min(2, "Party name must be at least 2 characters").max(100),
   assignedJudgeId: z.string().optional(),
   lawyerPartyAId: z.string().optional(),
   lawyerPartyBId: z.string().optional(),
@@ -60,11 +42,30 @@ type Profile = {
   unique_id: string | null;
 };
 
+// Type for the fetched FIR data
+type VerifiedFIR = {
+  id: string; // UUID
+  fir_number: string;
+  police_station: string;
+  accused_name: string;
+  offense_nature: string;
+  incident_date: string;
+};
+
 export const RegisterCaseForm = () => {
   const { profile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingStep, setLoadingStep] = useState("");
+  
+  // Data State
   const [judges, setJudges] = useState<Profile[]>([]);
   const [lawyers, setLawyers] = useState<Profile[]>([]);
+  
+  // FIR Verification State
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifiedFir, setVerifiedFir] = useState<VerifiedFIR | null>(null);
+  
+  // Search State
   const [judgeSearch, setJudgeSearch] = useState("");
   const [lawyerASearch, setLawyerASearch] = useState("");
   const [lawyerBSearch, setLawyerBSearch] = useState("");
@@ -78,6 +79,7 @@ export const RegisterCaseForm = () => {
     watch,
     setValue,
     reset,
+    trigger, // Used to trigger validation manually
     formState: { errors },
   } = useForm<CaseFormData>({
     resolver: zodResolver(caseFormSchema),
@@ -87,31 +89,38 @@ export const RegisterCaseForm = () => {
   });
 
   const caseType = watch("caseType");
+  const firIdInput = watch("firIdInput"); // Watch the input for verification logic
   const selectedJudgeId = watch("assignedJudgeId");
   const selectedLawyerAId = watch("lawyerPartyAId");
   const selectedLawyerBId = watch("lawyerPartyBId");
 
-  // Fetch judges and lawyers from database
-  useEffect(() => {
+  // Fetch Personnel
+useEffect(() => {
     const fetchPersonnel = async () => {
       try {
-        const { data: judgesData } = await supabase
+        // FIX 1: Removed 'unique_id' from selection
+        // FIX 2: Changed 'judiciary' to 'judge' to match Enum
+        const { data: judgesData, error: judgeError } = await supabase
           .from("profiles")
-          .select("id, full_name, role_category, unique_id")
-          .eq("role_category", "judiciary");
+          .select("id, full_name, role_category") 
+          .eq("role_category", "judge"); // Corrected Enum Value
 
-        const { data: lawyersData } = await supabase
+        // FIX 2: Changed 'legal_practitioner' to 'lawyer' to match Enum
+        const { data: lawyersData, error: lawyerError } = await supabase
           .from("profiles")
-          .select("id, full_name, role_category, unique_id")
-          .eq("role_category", "legal_practitioner");
+          .select("id, full_name, role_category")
+          .eq("role_category", "lawyer"); // Corrected Enum Value
 
-        setJudges(judgesData || []);
-        setLawyers(lawyersData || []);
+        if (judgeError) console.error("Judge Fetch Error:", judgeError);
+        if (lawyerError) console.error("Lawyer Fetch Error:", lawyerError);
+
+        // Explicitly cast to Profile[] to resolve the type confusion from the error
+        setJudges((judgesData as Profile[]) || []);
+        setLawyers((lawyersData as Profile[]) || []);
       } catch (error) {
         console.error("Error fetching personnel:", error);
       }
     };
-
     fetchPersonnel();
   }, []);
 
@@ -124,16 +133,15 @@ export const RegisterCaseForm = () => {
 
   const { partyA, partyB } = getPartyLabels();
 
+  // Helper filters
   const filteredJudges = judges.filter((judge) =>
-    judge.full_name.toLowerCase().includes(judgeSearch.toLowerCase())
+    (judge.full_name || "").toLowerCase().includes(judgeSearch.toLowerCase())
   );
-
   const filteredLawyersA = lawyers.filter((lawyer) =>
-    lawyer.full_name.toLowerCase().includes(lawyerASearch.toLowerCase())
+    (lawyer.full_name || "").toLowerCase().includes(lawyerASearch.toLowerCase())
   );
-
   const filteredLawyersB = lawyers.filter((lawyer) =>
-    lawyer.full_name.toLowerCase().includes(lawyerBSearch.toLowerCase())
+    (lawyer.full_name || "").toLowerCase().includes(lawyerBSearch.toLowerCase())
   );
 
   const getSelectedName = (id: string | undefined, list: Profile[]) => {
@@ -141,95 +149,169 @@ export const RegisterCaseForm = () => {
     return list.find((item) => item.id === id)?.full_name || null;
   };
 
+  // --- NEW: FIR Verification Logic ---
+  const handleVerifyFir = async () => {
+    if (!firIdInput) {
+      toast.error("Please enter an FIR Number first");
+      return;
+    }
+
+    setIsVerifying(true);
+    setVerifiedFir(null);
+
+    try {
+      // Use your existing service function or route here
+      const firData = await getFIRByNumber(firIdInput);
+
+      if (firData) {
+        setVerifiedFir(firData as unknown as VerifiedFIR);
+        toast.success("FIR Verified Successfully!");
+        // Auto-fill accused name if empty
+        setValue("partyBName", firData.accused_name || "Unknown");
+      } else {
+        toast.error("FIR not found. Please check the ID.");
+      }
+    } catch (error) {
+      console.error("Verification failed", error);
+      toast.error("Failed to verify FIR.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // --- MAIN SUBMIT LOGIC ---
   const onSubmit = async (data: CaseFormData) => {
     if (!profile?.id) {
       toast.error("You must be logged in to register a case");
       return;
     }
 
+    // Validation: Criminal cases MUST have a verified FIR linked
+    if (data.caseType === "criminal" && !verifiedFir) {
+      toast.error("Criminal cases require a verified FIR. Please click 'Verify'.");
+      return;
+    }
+
     setIsSubmitting(true);
+    
     try {
-      const { error } = await supabase.from("cases").insert({
+      // 1. WEB3: CREATE ON BLOCKCHAIN
+      setLoadingStep("Requesting Wallet Signature...");
+      
+      const chainMetaData = JSON.stringify({
+        desc: data.description || "",
+        type: data.caseType,
+        partyA: data.partyAName,
+        partyB: data.partyBName
+      });
+
+      // Pass FIR ID if verified, else use "CIVIL" or similar placeholder
+      const firIdForChain = verifiedFir ? verifiedFir.fir_number : "CIVIL-NA";
+
+      const { txHash, caseId } = await clerkCreateCase(
+        data.title, 
+        firIdForChain, 
+        chainMetaData
+      );
+
+      toast.success(`Case created on Blockchain! ID: ${caseId}`);
+
+      // 2. WEB2: PREPARE SUPABASE PAYLOAD
+      setLoadingStep("Syncing with Database...");
+
+      // Description helper
+      const descriptionWithFir = verifiedFir 
+        ? `Linked FIR: ${verifiedFir.fir_number}\nStation: ${verifiedFir.police_station}\n\n${data.description || ""}`
+        : data.description || "";
+      const clerkId = profile.id;
+      const supabasePayload = {
+        case_number: "", 
         title: data.title,
-        unique_identifier: data.uniqueIdentifier,
         case_type: data.caseType,
         party_a_name: data.partyAName,
         party_b_name: data.partyBName,
-        assigned_judge_id: data.assignedJudgeId || null,
-        lawyer_party_a_id: data.lawyerPartyAId || null,
-        lawyer_party_b_id: data.lawyerPartyBId || null,
-        description: data.description || null,
+        
+        assigned_judge_id: data.assignedJudgeId ? data.assignedJudgeId : null,
+        lawyer_party_a_id: data.lawyerPartyAId ? data.lawyerPartyAId : null,
+        lawyer_party_b_id: data.lawyerPartyBId ? data.lawyerPartyBId : null,
+        
+        description: descriptionWithFir,
         created_by: profile.id,
-        case_number: "", // Will be auto-generated by trigger
-      });
+        clerk_id: clerkId,
+        // Blockchain Fields
+        blockchain_tx_hash: txHash,
+        on_chain_case_id: caseId,
+        is_on_chain: true,
 
-      if (error) throw error;
+        // NEW: Foreign Key Link
+        fir_id: verifiedFir ? verifiedFir.id : null 
+      };
 
-      toast.success("Case registered successfully!");
+      console.log("Sending Payload:", supabasePayload);
+
+      const { error } = await supabase
+        .from("cases")
+        .insert(supabasePayload as any);
+
+      if (error) {
+        console.error("Supabase Error:", error);
+        throw error;
+      }
+
+      toast.success("Case registered successfully in System!");
+      
       reset();
+      setVerifiedFir(null);
       setJudgeSearch("");
       setLawyerASearch("");
       setLawyerBSearch("");
+
     } catch (error: any) {
       console.error("Error registering case:", error);
-      toast.error(error.message || "Failed to register case");
+      if (error.code === "ACTION_REJECTED" || error.message?.includes("user rejected")) {
+        toast.error("Transaction rejected by wallet.");
+      } else {
+        toast.error(error.message || "Failed to register case");
+      }
     } finally {
       setIsSubmitting(false);
+      setLoadingStep("");
     }
   };
 
   return (
-    <GlassCard className="p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 rounded-lg bg-primary/10">
-          <FilePlus className="w-5 h-5 text-primary" />
+    <GlassCard className="p-8">
+      <div className="flex items-center gap-4 mb-8">
+        <div className="p-3 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700">
+          <FilePlus className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold">Register New Case</h2>
-          <p className="text-sm text-muted-foreground">
-            Create a new case record in the system
+          <h2 className="text-2xl font-semibold text-white">Register New Case</h2>
+          <p className="text-slate-400 mt-1">
+            Create a new case record on the <strong>Blockchain</strong> & Database
           </p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* Case Title */}
         <div className="space-y-2">
           <Label htmlFor="title">Case Title *</Label>
           <Input
             id="title"
-            placeholder="Enter case title"
+            placeholder="e.g. State vs John Doe"
             {...register("title")}
             className={cn(errors.title && "border-destructive")}
           />
-          {errors.title && (
-            <p className="text-sm text-destructive">{errors.title.message}</p>
-          )}
+          {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
         </div>
 
-        {/* Unique Identifier */}
-        <div className="space-y-2">
-          <Label htmlFor="uniqueIdentifier">FIR ID / Case Number *</Label>
-          <Input
-            id="uniqueIdentifier"
-            placeholder="Enter FIR ID or Case Number"
-            {...register("uniqueIdentifier")}
-            className={cn(errors.uniqueIdentifier && "border-destructive")}
-          />
-          {errors.uniqueIdentifier && (
-            <p className="text-sm text-destructive">
-              {errors.uniqueIdentifier.message}
-            </p>
-          )}
-        </div>
-
-        {/* Case Type */}
+        {/* Case Type Select */}
         <div className="space-y-2">
           <Label>Case Type *</Label>
           <Select
             value={caseType}
-            onValueChange={(value: "criminal" | "civil") =>
-              setValue("caseType", value)}
+            onValueChange={(value: "criminal" | "civil") => setValue("caseType", value)}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select case type" />
@@ -241,70 +323,105 @@ export const RegisterCaseForm = () => {
           </Select>
         </div>
 
+        {/* FIR Verification Section (Only for Criminal Cases) */}
+        {caseType === "criminal" && (
+          <div className="space-y-2 p-4 bg-white/5 border border-white/10 rounded-lg">
+            <Label htmlFor="firIdInput">Link FIR Record *</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="firIdInput"
+                  placeholder="Enter FIR ID (e.g. MH/2026/001)"
+                  {...register("firIdInput")}
+                  className="pl-10"
+                  disabled={!!verifiedFir} // Disable input if already verified
+                />
+                <SearchIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              </div>
+              
+              {!verifiedFir ? (
+                <Button 
+                  type="button" 
+                  onClick={handleVerifyFir}
+                  disabled={isVerifying || !firIdInput}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {isVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
+                </Button>
+              ) : (
+                <Button 
+                  type="button" 
+                  variant="destructive"
+                  onClick={() => {
+                    setVerifiedFir(null);
+                    setValue("firIdInput", "");
+                  }}
+                >
+                  <XCircle className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+
+            {/* Verification Success Card */}
+            {verifiedFir && (
+              <div className="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-md flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-semibold text-emerald-300">FIR Verified Successfully</p>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-2 text-slate-300">
+                    <span><strong>Station:</strong> {verifiedFir.police_station}</span>
+                    <span><strong>Date:</strong> {new Date(verifiedFir.incident_date).toLocaleDateString()}</span>
+                    <span className="col-span-2"><strong>Offense:</strong> {verifiedFir.offense_nature}</span>
+                    <span className="col-span-2"><strong>Accused:</strong> {verifiedFir.accused_name}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Party Information */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="partyAName">
-              {partyA} Name (Party A) *
-            </Label>
+            <Label htmlFor="partyAName">{partyA} Name *</Label>
             <Input
               id="partyAName"
               placeholder={`Enter ${partyA.toLowerCase()} name`}
               {...register("partyAName")}
               className={cn(errors.partyAName && "border-destructive")}
             />
-            {errors.partyAName && (
-              <p className="text-sm text-destructive">
-                {errors.partyAName.message}
-              </p>
-            )}
+            {errors.partyAName && <p className="text-sm text-destructive">{errors.partyAName.message}</p>}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="partyBName">
-              {partyB} Name (Party B) *
-            </Label>
+            <Label htmlFor="partyBName">{partyB} Name *</Label>
             <Input
               id="partyBName"
               placeholder={`Enter ${partyB.toLowerCase()} name`}
               {...register("partyBName")}
               className={cn(errors.partyBName && "border-destructive")}
             />
-            {errors.partyBName && (
-              <p className="text-sm text-destructive">
-                {errors.partyBName.message}
-              </p>
-            )}
+            {errors.partyBName && <p className="text-sm text-destructive">{errors.partyBName.message}</p>}
           </div>
         </div>
 
-        {/* Legal Personnel */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Assign Legal Personnel</h3>
+        {/* Legal Personnel (Judge & Lawyers) */}
+        <div className="space-y-4 pt-4 border-t border-white/10">
+          <h3 className="text-lg font-medium text-blue-200">Assign Legal Personnel</h3>
 
           {/* Assign Judge */}
           <div className="space-y-2">
             <Label>Assign Judge</Label>
             <Popover open={judgeOpen} onOpenChange={setJudgeOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={judgeOpen}
-                  className="w-full justify-between"
-                >
-                  {getSelectedName(selectedJudgeId, judges) ||
-                    "Select a judge..."}
+                <Button variant="outline" role="combobox" aria-expanded={judgeOpen} className="w-full justify-between">
+                  {getSelectedName(selectedJudgeId, judges) || "Select a judge..."}
                   <SearchIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-full p-0 bg-popover" align="start">
                 <Command>
-                  <CommandInput
-                    placeholder="Search judges..."
-                    value={judgeSearch}
-                    onValueChange={setJudgeSearch}
-                  />
+                  <CommandInput placeholder="Search judges..." value={judgeSearch} onValueChange={setJudgeSearch} />
                   <CommandList>
                     <CommandEmpty>No judges found.</CommandEmpty>
                     <CommandGroup>
@@ -318,11 +435,6 @@ export const RegisterCaseForm = () => {
                           }}
                         >
                           <span>{judge.full_name}</span>
-                          {judge.unique_id && (
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              ({judge.unique_id})
-                            </span>
-                          )}
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -332,31 +444,20 @@ export const RegisterCaseForm = () => {
             </Popover>
           </div>
 
-          {/* Lawyers */}
+          {/* Lawyers Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Lawyer for Party A */}
             <div className="space-y-2">
               <Label>Lawyer for {partyA}</Label>
               <Popover open={lawyerAOpen} onOpenChange={setLawyerAOpen}>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={lawyerAOpen}
-                    className="w-full justify-between"
-                  >
-                    {getSelectedName(selectedLawyerAId, lawyers) ||
-                      "Select a lawyer..."}
+                  <Button variant="outline" role="combobox" aria-expanded={lawyerAOpen} className="w-full justify-between">
+                    {getSelectedName(selectedLawyerAId, lawyers) || "Select a lawyer..."}
                     <SearchIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-full p-0 bg-popover" align="start">
                   <Command>
-                    <CommandInput
-                      placeholder="Search lawyers..."
-                      value={lawyerASearch}
-                      onValueChange={setLawyerASearch}
-                    />
+                    <CommandInput placeholder="Search lawyers..." value={lawyerASearch} onValueChange={setLawyerASearch} />
                     <CommandList>
                       <CommandEmpty>No lawyers found.</CommandEmpty>
                       <CommandGroup>
@@ -370,11 +471,6 @@ export const RegisterCaseForm = () => {
                             }}
                           >
                             <span>{lawyer.full_name}</span>
-                            {lawyer.unique_id && (
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                ({lawyer.unique_id})
-                              </span>
-                            )}
                           </CommandItem>
                         ))}
                       </CommandGroup>
@@ -384,29 +480,18 @@ export const RegisterCaseForm = () => {
               </Popover>
             </div>
 
-            {/* Lawyer for Party B */}
             <div className="space-y-2">
               <Label>Lawyer for {partyB}</Label>
               <Popover open={lawyerBOpen} onOpenChange={setLawyerBOpen}>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={lawyerBOpen}
-                    className="w-full justify-between"
-                  >
-                    {getSelectedName(selectedLawyerBId, lawyers) ||
-                      "Select a lawyer..."}
+                  <Button variant="outline" role="combobox" aria-expanded={lawyerBOpen} className="w-full justify-between">
+                    {getSelectedName(selectedLawyerBId, lawyers) || "Select a lawyer..."}
                     <SearchIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-full p-0 bg-popover" align="start">
                   <Command>
-                    <CommandInput
-                      placeholder="Search lawyers..."
-                      value={lawyerBSearch}
-                      onValueChange={setLawyerBSearch}
-                    />
+                    <CommandInput placeholder="Search lawyers..." value={lawyerBSearch} onValueChange={setLawyerBSearch} />
                     <CommandList>
                       <CommandEmpty>No lawyers found.</CommandEmpty>
                       <CommandGroup>
@@ -420,11 +505,6 @@ export const RegisterCaseForm = () => {
                             }}
                           >
                             <span>{lawyer.full_name}</span>
-                            {lawyer.unique_id && (
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                ({lawyer.unique_id})
-                              </span>
-                            )}
                           </CommandItem>
                         ))}
                       </CommandGroup>
@@ -441,7 +521,7 @@ export const RegisterCaseForm = () => {
           <Label htmlFor="description">Case Description</Label>
           <Textarea
             id="description"
-            placeholder="Enter case description (optional)"
+            placeholder="Enter brief description"
             rows={3}
             {...register("description")}
           />
@@ -450,22 +530,20 @@ export const RegisterCaseForm = () => {
         {/* Submit Button */}
         <Button
           type="submit"
-          className="w-full"
+          className="w-full h-12 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/20 text-white font-medium"
           disabled={isSubmitting}
         >
-          {isSubmitting
-            ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Registering Case...
-              </>
-            )
-            : (
-              <>
-                <FilePlus className="w-4 h-4 mr-2" />
-                Register Case
-              </>
-            )}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              {loadingStep || "Processing..."}
+            </>
+          ) : (
+            <>
+              <FilePlus className="w-5 h-5 mr-2" />
+              Register Case (Blockchain)
+            </>
+          )}
         </Button>
       </form>
     </GlassCard>
