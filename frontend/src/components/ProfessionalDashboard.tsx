@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NyaySutraSidebar } from "@/components/dashboard/NyaySutraSidebar";
 import { RegisterCaseForm } from "@/components/dashboard/clerk/RegisterCaseForm";
 import { SearchCase } from "@/components/dashboard/clerk/SearchCase";
 import { CaseManagementPanel } from "@/components/dashboard/clerk/CaseManagementPanel";
@@ -69,34 +70,36 @@ const ProfessionalDashboard = () => {
   // Show Clerk-specific dashboard
   if (profile?.role_category === "clerk") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
-        {/* Background Effects */}
-        <div className="absolute inset-0 grid-background opacity-10" />
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl" />
-
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative z-10 max-w-7xl mx-auto px-6 py-12"
-        >
-          <div className="mb-8">
-            <h1 className="text-5xl font-bold text-white flex items-center gap-3 mb-2">
-              <Briefcase className="w-10 h-10 text-cyan-400" />
-              Clerk Dashboard
-            </h1>
-            <p className="text-slate-400">
-              Welcome back, <span className="font-semibold text-slate-200">{profile?.full_name}</span>
-            </p>
-          </div>
+      <div className="flex min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+        <NyaySutraSidebar />
+        <main className="flex-1 ml-64 p-8">
+          {/* Background Effects */}
+          <div className="absolute inset-0 grid-background opacity-10" />
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl" />
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="glass-card p-8 rounded-2xl border border-white/10"
+            className="relative z-10"
           >
-            <Tabs defaultValue="register" className="w-full">
+            <div className="mb-8">
+              <h1 className="text-5xl font-bold text-white flex items-center gap-3 mb-2">
+                <Briefcase className="w-10 h-10 text-cyan-400" />
+                Clerk Dashboard
+              </h1>
+              <p className="text-slate-400">
+                Welcome back, <span className="font-semibold text-slate-200">{profile?.full_name}</span>
+              </p>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="glass-card p-8 rounded-2xl border border-white/10"
+            >
+              <Tabs defaultValue="register" className="w-full">
               <TabsList className="grid w-full grid-cols-3 mb-8 bg-white/5 border border-white/10 p-1">
                 <TabsTrigger 
                   value="register"
@@ -182,9 +185,10 @@ const ProfessionalDashboard = () => {
                 </motion.div>
               </TabsContent>
             </Tabs>
-          </motion.div>
-        </motion.div>
-      </div>
+            </motion.div>
+            </motion.div>
+          </main>
+        </div>
     );
   }
 
@@ -229,41 +233,43 @@ const ProfessionalDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
-      {/* Background Effects */}
-      <div className="absolute inset-0 grid-background opacity-10" />
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl" />
+    <div className="flex min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+      <NyaySutraSidebar />
+      <main className="flex-1 ml-64 p-8">
+        {/* Background Effects */}
+        <div className="absolute inset-0 grid-background opacity-10" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl" />
 
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="relative z-10 max-w-7xl mx-auto px-6 py-12"
-      >
-        {/* Header */}
-        <motion.div
-          variants={itemVariants}
-          className="mb-12"
-        >
-          <div className="flex items-end gap-4">
-            <div>
-              <h1 className="text-5xl font-bold text-white mb-2">
-                {getRoleTitle()}
-              </h1>
-              <p className="text-slate-400">
-                Welcome back, <span className="font-semibold text-slate-200">{profile?.full_name}</span>
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Stats Grid */}
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid md:grid-cols-4 gap-6 mb-12"
+          className="relative z-10"
+        >
+          {/* Header */}
+          <motion.div
+            variants={itemVariants}
+            className="mb-12"
+          >
+            <div className="flex items-end gap-4">
+              <div>
+                <h1 className="text-5xl font-bold text-white mb-2">
+                  {getRoleTitle()}
+                </h1>
+                <p className="text-slate-400">
+                  Welcome back, <span className="font-semibold text-slate-200">{profile?.full_name}</span>
+                </p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Stats Grid */}
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid md:grid-cols-4 gap-6 mb-12"
         >
           {stats.map((stat, i) => (
             <motion.div
@@ -410,7 +416,8 @@ const ProfessionalDashboard = () => {
             </div>
           </div>
         </motion.div>
-      </motion.div>
+        </motion.div>
+      </main>
     </div>
   );
 };

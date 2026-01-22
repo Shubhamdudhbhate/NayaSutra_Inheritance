@@ -1,41 +1,55 @@
 import { useRole } from "@/contexts/RoleContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+
+// Import all dashboard components
+import { PoliceDashboard } from "@/components/dashboard/PoliceDashboard";
 import { JudiciaryDashboard } from "@/components/dashboard/JudiciaryDashboard";
+import { PractitionerDashboard } from "@/components/dashboard/PractitionerDashboard";
 import { ClerkDashboard } from "@/components/dashboard/clerk/ClerkDashboard";
 import { PublicDashboard } from "@/components/dashboard/PublicDashboard";
-import { PoliceDashboard } from "@/components/dashboard/PoliceDashboard";
-import ProfessionalDashboard from "@/components/ProfessionalDashboard";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 const Dashboard = () => {
   const { currentUser } = useRole();
-  const { profile } = useAuth();
 
+  // Wait until currentUser is loaded
   if (!currentUser) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-screen">
         <LoadingSpinner size={48} />
       </div>
     );
   }
 
-  // Show professional dashboard for new roles
-  if (profile?.role_category === "lawyer" || profile?.role_category === "clerk") {
-    return <ProfessionalDashboard />;
-  }
+  // Log role detection
+  console.log("🔍 Dashboard Router: Checking user role...", {
+    currentUser: currentUser.name,
+    role: currentUser.role,
+    roleCategory: currentUser.roleCategory,
+  });
 
-  // Role-based dashboard switching for existing roles
+  // ROLE-BASED DASHBOARD ROUTING
+  // Each role gets their own dashboard component
   switch (currentUser.role) {
-    case "judge":
-      return <JudiciaryDashboard />;
-    case "clerk":
-      return <ClerkDashboard />;
     case "police":
+      console.log("🚔 Dashboard Router: Rendering PoliceDashboard");
       return <PoliceDashboard />;
+
+    case "judge":
+      console.log("⚖️ Dashboard Router: Rendering JudiciaryDashboard");
+      return <JudiciaryDashboard />;
+
+    case "clerk":
+      console.log("📋 Dashboard Router: Rendering ClerkDashboard");
+      return <ClerkDashboard />;
+
+    case "lawyer":
+      console.log("👨‍⚖️ Dashboard Router: Rendering PractitionerDashboard");
+      return <PractitionerDashboard />;
+
     case "observer":
-      return <PublicDashboard />;
     default:
-      return <ProfessionalDashboard />;
+      console.log("👥 Dashboard Router: Rendering PublicDashboard");
+      return <PublicDashboard />;
   }
 };
 

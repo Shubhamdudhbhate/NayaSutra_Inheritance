@@ -1,14 +1,7 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Play,
-  Video,
-  FileText,
-  ChevronRight,
-  Gavel,
-  Clock,
-  Users,
-} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronRight, Clock, FileText, Gavel, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +44,7 @@ export const LiveCauseList = ({
   onVideoCall,
   onPassOrder,
 }: LiveCauseListProps) => {
+  const navigate = useNavigate();
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const getStatusBadge = (item: CauseListItem) => {
@@ -94,7 +88,7 @@ export const LiveCauseList = ({
               <Gavel className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-lg">Live Cause List</CardTitle>
+              <CardTitle className="text-lg">Today's Case List</CardTitle>
               <p className="text-sm text-muted-foreground mt-0.5">
                 Today's scheduled hearings
               </p>
@@ -124,7 +118,8 @@ export const LiveCauseList = ({
               <AnimatePresence>
                 {items.map((item) => {
                   const isCurrentHearing = item.id === currentHearingId;
-                  const isNextInLine = item.id === nextInLineId && !isCurrentHearing;
+                  const isNextInLine = item.id === nextInLineId &&
+                    !isCurrentHearing;
                   const isExpanded = expandedRow === item.id;
 
                   return (
@@ -136,9 +131,10 @@ export const LiveCauseList = ({
                       className={cn(
                         "table-row-hover cursor-pointer",
                         isCurrentHearing && "animate-row-pulse bg-success/5",
-                        isNextInLine && "bg-primary/5"
+                        isNextInLine && "bg-primary/5",
                       )}
-                      onClick={() => setExpandedRow(isExpanded ? null : item.id)}
+                      onClick={() =>
+                        setExpandedRow(isExpanded ? null : item.id)}
                     >
                       <TableCell className="font-medium">{item.srNo}</TableCell>
                       <TableCell>
@@ -147,18 +143,24 @@ export const LiveCauseList = ({
                             {item.caseNumber}
                           </span>
                           {item.isUrgent && (
-                            <Badge className="badge-urgent text-xs">Urgent</Badge>
+                            <Badge className="badge-urgent text-xs">
+                              Urgent
+                            </Badge>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-muted-foreground" />
-                          <span className="max-w-[200px] truncate">{item.parties}</span>
+                          <span className="max-w-[200px] truncate">
+                            {item.parties}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-muted-foreground">{item.caseType}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {item.caseType}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="font-normal">
@@ -167,60 +169,15 @@ export const LiveCauseList = ({
                       </TableCell>
                       <TableCell>{getStatusBadge(item)}</TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          {!isCurrentHearing && item.status === "scheduled" && (
-                            <Button
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onStartHearing(item.id);
-                              }}
-                              className="gap-1.5"
-                            >
-                              <Play className="h-3.5 w-3.5" />
-                              Start
-                            </Button>
-                          )}
+                        <div className="flex items-center justify-end gap-2">
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenCaseFile(item.id);
-                            }}
+                            onClick={() => navigate(`/cases/${item.id}`)}
+                            className="gap-1"
                           >
-                            <FileText className="h-4 w-4" />
+                            <ChevronRight className="h-4 w-4" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onVideoCall(item.id);
-                            }}
-                          >
-                            <Video className="h-4 w-4" />
-                          </Button>
-                          {isCurrentHearing && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onPassOrder(item.id);
-                              }}
-                              className="gap-1.5"
-                            >
-                              <Gavel className="h-3.5 w-3.5" />
-                              Pass Order
-                            </Button>
-                          )}
-                          <ChevronRight
-                            className={cn(
-                              "h-4 w-4 text-muted-foreground transition-transform",
-                              isExpanded && "rotate-90"
-                            )}
-                          />
                         </div>
                       </TableCell>
                     </motion.tr>

@@ -36,7 +36,7 @@ export const useCourtSession = (caseId: string) => {
   const [myPermission, setMyPermission] = useState<PermissionRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const isJudge = profile?.role_category === 'judiciary';
+  const isJudge = profile?.role_category === 'judiciary' || profile?.role_category === 'judge';
   const canUpload = myPermission?.status === 'granted' || isJudge;
 
   // Mark caseId as used to avoid lint warning

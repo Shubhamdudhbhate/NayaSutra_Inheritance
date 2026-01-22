@@ -12,10 +12,10 @@ import { toast } from "sonner";
 // Define Roles matching your Database + Frontend mapping
 type RoleCategory =
   | "judiciary"
-  | "judge"          // Added for DB compatibility
+  | "judge" // Added for DB compatibility
   | "lawyer"
   | "clerk"
-  | "court_staff"    // Added for DB compatibility
+  | "court_staff" // Added for DB compatibility
   | "public_party"
   | "police"
   | "police_officer" // Added for DB compatibility
@@ -39,7 +39,12 @@ type AuthContextType = {
   isLoading: boolean;
   // Kept for compatibility but likely unused now
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, fullName: string, role: RoleCategory) => Promise<{ error: Error | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    role: RoleCategory,
+  ) => Promise<{ error: Error | null }>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -80,13 +85,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (token && userId) {
         console.log("Restoring custom session for:", userId);
-        
-        // Fetch the real profile data
+
+        // Fetch the real profile data from Supabase
         const profileData = await fetchProfile(userId);
 
         if (profileData) {
+          console.log("✅ Profile loaded from Supabase:", {
+            id: profileData.id,
+            role_category: profileData.role_category,
+            full_name: profileData.full_name,
+          });
           setProfile(profileData);
-          
+
           // MOCK THE USER OBJECT
           // This ensures components expecting 'user' (like Dashboard) don't crash.
           const mockUser: any = {
@@ -96,7 +106,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             created_at: new Date().toISOString(),
           };
           setUser(mockUser);
-          
+
           // Create a fake session object if needed
           setSession({
             access_token: token,
@@ -104,20 +114,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             user: mockUser,
           } as Session);
         } else {
-           // If profile fetch fails (e.g. deleted user), clear auth
-           console.warn("Token existed but profile not found. Logging out.");
-           localStorage.clear();
+          // If profile fetch fails (e.g. deleted user), clear auth
+          console.warn("Token existed but profile not found. Logging out.");
+          localStorage.clear();
         }
-      } 
-      
-      // 2. FALLBACK: Check Standard Supabase Auth (Optional, keeps backward compatibility)
+      } // 2. FALLBACK: Check Standard Supabase Auth (Optional, keeps backward compatibility)
       else {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-           // This path is unlikely to be used now, but safe to keep
-           setSession(session);
-           setUser(session.user);
-           // logic to fetch profile by user_id would go here if you still had that column
+          // This path is unlikely to be used now, but safe to keep
+          setSession(session);
+          setUser(session.user);
+          // logic to fetch profile by user_id would go here if you still had that column
         }
       }
 
@@ -142,12 +150,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     // 1. Clear Supabase (Good practice)
     await supabase.auth.signOut();
-    
+
     // 2. Clear Local Storage (CRITICAL)
     localStorage.removeItem("auth_token");
     localStorage.removeItem("user_role");
     localStorage.removeItem("user_id");
-    
+
     // 3. Reset State
     setUser(null);
     setSession(null);
@@ -157,7 +165,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Legacy stubs (unused but kept to prevent TS errors in other files)
   const signIn = async (e: string, p: string) => ({ error: null });
-  const signUp = async (e: string, p: string, f: string, r: RoleCategory) => ({ error: null });
+  const signUp = async (e: string, p: string, f: string, r: RoleCategory) => ({
+    error: null,
+  });
 
   const value = {
     user,
@@ -176,7 +186,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    // Return default context instead of throwing
+    return {
+      user: null,
+      session: null,
+      profile: null,
+      signOut: async () => {},
+      isAuthenticated: false,
+      isLoading: true,
+      signIn: async () => ({ error: new Error("Auth not initialized") }),
+      signUp: async () => ({ error: new Error("Auth not initialized") }),
+    } as AuthContextType;
   }
   return context;
 };

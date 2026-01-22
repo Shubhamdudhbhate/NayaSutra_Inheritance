@@ -1,23 +1,25 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  LayoutDashboard,
-  ListOrdered,
-  FolderOpen,
-  PenLine,
-  Archive,
-  Calendar,
   BarChart3,
-  LogOut,
-  Activity,
-  Scale,
+  Calendar,
   ChevronLeft,
   ChevronRight,
+  FolderOpen,
+  LayoutDashboard,
+  LogOut,
+  PenLine,
+  Scale,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface NavItem {
@@ -30,17 +32,23 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { id: "cause-list", label: "Today's Cause List", icon: ListOrdered, path: "/cause-list" },
-  { id: "cases", label: "Case Repository", icon: FolderOpen, path: "/courts" },
-  { id: "judgment", label: "Judgment Writer", icon: PenLine, path: "/judgment-writer" },
-  { id: "evidence", label: "Evidence Vault", icon: Archive, path: "/evidence-vault" },
-  { id: "calendar", label: "Court Calendar", icon: Calendar, path: "/court-calendar" },
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    path: "/dashboard",
+  },
+  { id: "cases", label: "Cases", icon: FolderOpen, path: "/courts" },
+  {
+    id: "calendar",
+    label: "Court Calendar",
+    icon: Calendar,
+    path: "/court-calendar",
+  },
   { id: "analytics", label: "Analytics", icon: BarChart3, path: "/analytics" },
 ];
 
 const bottomNavItems: NavItem[] = [
-  { id: "health", label: "System Health", icon: Activity, path: "/system-health" },
   { id: "logout", label: "Log Out", icon: LogOut, path: "/auth" },
 ];
 
@@ -52,13 +60,13 @@ export const NyaySutraSidebar = () => {
 
   const isActive = (path: string, id: string) => {
     if (id === "dashboard") return location.pathname === "/dashboard";
-    if (id === "cases") return location.pathname.startsWith("/courts") || location.pathname.startsWith("/sections");
-    if (id === "cause-list") return location.pathname === "/cause-list";
-    if (id === "judgment") return location.pathname === "/judgment-writer";
-    if (id === "evidence") return location.pathname === "/evidence-vault";
+    if (id === "cases") {
+      return location.pathname.startsWith("/courts") ||
+        location.pathname.startsWith("/sections") ||
+        location.pathname.startsWith("/cases");
+    }
     if (id === "calendar") return location.pathname === "/court-calendar";
     if (id === "analytics") return location.pathname === "/analytics";
-    if (id === "health") return location.pathname === "/system-health";
     return location.pathname === path;
   };
 
@@ -77,7 +85,9 @@ export const NyaySutraSidebar = () => {
     navigate(item.path);
   };
 
-  const NavItemComponent = ({ item, isBottom = false }: { item: NavItem; isBottom?: boolean }) => {
+  const NavItemComponent = (
+    { item, isBottom = false }: { item: NavItem; isBottom?: boolean },
+  ) => {
     void isBottom; // Mark as intentionally unused
     const Icon = item.icon;
     const active = isActive(item.path, item.id);
@@ -88,7 +98,7 @@ export const NyaySutraSidebar = () => {
         className={cn(
           "nav-item w-full",
           active && !item.comingSoon && "active",
-          item.comingSoon && "opacity-60"
+          item.comingSoon && "opacity-60",
         )}
       >
         <Icon className="h-5 w-5 flex-shrink-0" />
@@ -125,7 +135,7 @@ export const NyaySutraSidebar = () => {
       <aside
         className={cn(
           "fixed left-0 top-0 h-screen bg-sidebar-background border-r border-sidebar-border flex flex-col transition-all duration-300 z-50",
-          collapsed ? "w-16" : "w-64"
+          collapsed ? "w-16" : "w-64",
         )}
       >
         {/* Logo */}
@@ -135,8 +145,12 @@ export const NyaySutraSidebar = () => {
           </div>
           {!collapsed && (
             <div>
-              <h1 className="font-bold text-lg text-sidebar-foreground">NyaySutra</h1>
-              <p className="text-xs text-sidebar-foreground/60">Digital Court System</p>
+              <h1 className="font-bold text-lg text-sidebar-foreground">
+                NyaySutra
+              </h1>
+              <p className="text-xs text-sidebar-foreground/60">
+                Digital Court System
+              </p>
             </div>
           )}
         </div>
@@ -144,7 +158,10 @@ export const NyaySutraSidebar = () => {
         {/* Main Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
           {navItems.map((item) => (
-            <NavItemComponent key={item.id} item={item} />
+            <NavItemComponent
+              key={item.id}
+              item={item}
+            />
           ))}
         </nav>
 
@@ -162,7 +179,9 @@ export const NyaySutraSidebar = () => {
           onClick={() => setCollapsed(!collapsed)}
           className="absolute -right-3 top-7 h-6 w-6 rounded-full border bg-background shadow-md hover:bg-muted"
         >
-          {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+          {collapsed
+            ? <ChevronRight className="h-3 w-3" />
+            : <ChevronLeft className="h-3 w-3" />}
         </Button>
       </aside>
     </TooltipProvider>

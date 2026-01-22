@@ -1,10 +1,9 @@
 import { useNavigate } from "react-router-dom";
-import { LogOut, Shield, Wallet } from "lucide-react";
+import { LogOut, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
-import { useWeb3 } from "@/contexts/Web3Context";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -20,7 +19,6 @@ export const Header = () => {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
   const { currentUser, roleTheme } = useRole();
-  const { address, isConnected, connect, disconnect } = useWeb3();
 
   const getInitials = (name: string) => {
     return name
@@ -57,40 +55,6 @@ export const Header = () => {
 
           {/* Right Section */}
           <div className="flex items-center gap-3">
-            {/* Wallet Connection */}
-            {currentUser?.role === "judge" && (
-              <div className="flex items-center gap-2">
-                {isConnected
-                  ? (
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                      <Wallet className="w-4 h-4 text-emerald-400" />
-                      <span className="text-xs font-mono text-emerald-400">
-                        {address?.slice(0, 6)}...{address?.slice(-4)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={disconnect}
-                        className="h-6 px-2 text-xs"
-                      >
-                        Disconnect
-                      </Button>
-                    </div>
-                  )
-                  : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={connect}
-                      className="gap-2"
-                    >
-                      <Wallet className="w-4 h-4" />
-                      Connect Wallet
-                    </Button>
-                  )}
-              </div>
-            )}
-
             {/* User Menu */}
             {profile && (
               <DropdownMenu>

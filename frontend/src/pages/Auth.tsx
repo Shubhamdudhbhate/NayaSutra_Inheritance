@@ -78,7 +78,7 @@
 // const Auth = () => {
 //   const [searchParams] = useSearchParams();
 //   const navigate = useNavigate();
-  
+
 //   // Use the Web3 Context for Wallet connection
 //   const {
 //     address,
@@ -88,7 +88,7 @@
 //     signMessage,
 //     isSigning,
 //   } = useWeb3();
-  
+
 //   const [authInitiated, setAuthInitiated] = useState(false);
 
 //   // Get selected role from URL or default to public_party
@@ -96,7 +96,7 @@
 //   const role: RoleCategory = roleParam && roleConfig[roleParam]
 //     ? roleParam
 //     : "public_party";
-    
+
 //   const config = roleConfig[role];
 //   const Icon = config.icon;
 
@@ -106,7 +106,7 @@
 //     if (token) {
 //       // You can add logic here to verify if token is expired
 //       const savedRole = localStorage.getItem("user_role") || "public_party";
-      
+
 //       // Determine dashboard path
 //       if (savedRole === "police") {
 //         navigate("/police/dashboard", { replace: true });
@@ -174,7 +174,7 @@
 
 //       // STEP 2: Sign the Nonce
 //       const message = `Welcome to NyaySutra.\n\nNonce: ${profileData.nonce}\n\nSign this message to verify your identity.`;
-      
+
 //       const signature = await signMessage(message);
 
 //       if (!signature) {
@@ -185,9 +185,9 @@
 
 //       // STEP 3: Verify Signature on Backend
 //       const { data: authResult, error: authError } = await supabase
-//         .rpc('verify_user_login', { 
+//         .rpc('verify_user_login', {
 //            _wallet: walletAddress,
-//            _signature: signature 
+//            _signature: signature
 //         });
 
 //       if (authError) throw new Error(authError.message);
@@ -202,7 +202,7 @@
 //       localStorage.setItem("user_id", profileData.id);
 
 //       toast.success("Login successful!");
-      
+
 //       checkRoleAndRedirect(profileData.role_category);
 
 //     } catch (err: any) {
@@ -457,20 +457,19 @@
 
 // export default Auth;
 
-
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  Briefcase,
   CheckCircle2,
+  Clipboard,
   Gavel,
   Loader2,
   Shield,
   Users,
   Wallet,
-  Briefcase,
-  Clipboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/Web3Context";
@@ -479,7 +478,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 // Define the Roles allowed in the UI
-type RoleCategory = "judiciary" | "lawyer" | "clerk" | "public_party" | "police";
+type RoleCategory =
+  | "judiciary"
+  | "lawyer"
+  | "clerk"
+  | "public_party"
+  | "police";
 
 // Configuration for UI appearance per role
 const roleConfig = {
@@ -613,18 +617,29 @@ const Auth = () => {
 
       // If no profile found -> REJECT IMMEDIATELY
       if (!profileData) {
-        throw new Error("Access Denied: Your wallet is not whitelisted. Please contact the administrator.");
+        throw new Error(
+          "Access Denied: Your wallet is not whitelisted. Please contact the administrator.",
+        );
       }
 
       // Security Check: Block suspended users
-      if ((profileData as any).status === 'suspended' || (profileData as any).status === 'pending') {
-        throw new Error("Access Denied: Your account is " + (profileData as any).status);
+      if (
+        (profileData as any).status === "suspended" ||
+        (profileData as any).status === "pending"
+      ) {
+        throw new Error(
+          "Access Denied: Your account is " + (profileData as any).status,
+        );
       }
 
-      if (!(profileData as any).nonce) throw new Error("Security Error: Nonce missing.");
+      if (!(profileData as any).nonce) {
+        throw new Error("Security Error: Nonce missing.");
+      }
 
       // STEP 2: Sign the Nonce
-      const message = `Welcome to NyaySutra.\n\nNonce: ${(profileData as any).nonce}\n\nSign this message to verify your identity.`;
+      const message = `Welcome to NyaySutra.\n\nNonce: ${
+        (profileData as any).nonce
+      }\n\nSign this message to verify your identity.`;
 
       const signature = await signMessage(message);
 
@@ -635,10 +650,11 @@ const Auth = () => {
       }
 
       // STEP 3: Verify Signature on Backend
-      const { data: authResult, error: authError } = await (supabase.rpc as any)('verify_user_login', {
-        _wallet: walletAddress,
-        _signature: signature,
-      });
+      const { data: authResult, error: authError } =
+        await (supabase.rpc as any)("verify_user_login", {
+          _wallet: walletAddress,
+          _signature: signature,
+        });
 
       if (authError) throw new Error(authError.message);
 
@@ -651,11 +667,16 @@ const Auth = () => {
       localStorage.setItem("user_role", (profileData as any).role_category);
       localStorage.setItem("user_id", (profileData as any).id);
 
+      console.log("✅ Auth: Login successful! User role from Supabase:", {
+        userId: (profileData as any).id,
+        roleFromSupabase: (profileData as any).role_category,
+        tokenSaved: !!authResult.token,
+      });
+
       toast.success("Login successful!");
 
       // All users go to /dashboard (police dashboard is handled by Dashboard router)
       navigate("/dashboard", { replace: true });
-
     } catch (err: any) {
       console.error("Auth Error:", err);
       // Show a clear error message to the user
@@ -675,7 +696,13 @@ const Auth = () => {
     "shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30",
   );
 
-  const roles: RoleCategory[] = ["judiciary", "lawyer", "clerk", "public_party", "police"];
+  const roles: RoleCategory[] = [
+    "judiciary",
+    "lawyer",
+    "clerk",
+    "public_party",
+    "police",
+  ];
 
   // --- RENDER 1: ROLE SELECTION SCREEN (No role in URL) ---
   if (!roleParam) {
@@ -698,7 +725,10 @@ const Auth = () => {
             className="text-center mb-12"
           >
             <h1 className="text-5xl font-bold text-white mb-4">
-              Welcome to <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">NyaySutra</span>
+              Welcome to{" "}
+              <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                NyaySutra
+              </span>
             </h1>
             <p className="text-xl text-slate-300">
               Choose your role to continue
@@ -725,14 +755,16 @@ const Auth = () => {
                   className={cn(
                     "glass-card p-6 rounded-2xl border-2 cursor-pointer transition-all",
                     cfg.border,
-                    "hover:shadow-lg hover:shadow-blue-500/20"
+                    "hover:shadow-lg hover:shadow-blue-500/20",
                   )}
                 >
                   <div className="text-center">
-                    <div className={cn(
-                      "w-16 h-16 mx-auto mb-4 rounded-xl flex items-center justify-center bg-gradient-to-br",
-                      cfg.gradient
-                    )}>
+                    <div
+                      className={cn(
+                        "w-16 h-16 mx-auto mb-4 rounded-xl flex items-center justify-center bg-gradient-to-br",
+                        cfg.gradient,
+                      )}
+                    >
                       <RoleIcon className="w-8 h-8 text-white" />
                     </div>
                     <h3 className="text-lg font-bold text-white mb-1">
@@ -795,10 +827,12 @@ const Auth = () => {
                     config.bg.replace("bg-", "bg-"),
                   )}
                 />
-                <div className={cn(
-                  "relative w-20 h-20 rounded-2xl bg-gradient-to-br flex items-center justify-center border border-white/20",
-                  config.gradient
-                )}>
+                <div
+                  className={cn(
+                    "relative w-20 h-20 rounded-2xl bg-gradient-to-br flex items-center justify-center border border-white/20",
+                    config.gradient,
+                  )}
+                >
                   <Icon className="w-10 h-10 text-white" />
                 </div>
               </motion.div>

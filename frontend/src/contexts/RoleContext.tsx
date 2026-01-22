@@ -88,23 +88,23 @@ const mapRoleCategoryToCourtRole = (roleCategory: string): CourtRole => {
   const normalized = roleCategory?.toLowerCase() || "";
 
   switch (normalized) {
-    case "police": 
+    case "police":
     case "police_officer": // Handle variations
       return "police";
-    
-    case "judiciary": 
+
+    case "judiciary":
     case "judge": // <--- ADD THIS (Matches your Database)
       return "judge";
-    
-    case "lawyer": 
+
+    case "lawyer":
     case "advocate":
       return "lawyer";
-    
+
     case "clerk":
     case "court_staff": // <--- ADD THIS (Matches your Database)
     case "legal_practitioner":
       return "clerk";
-      
+
     case "public_party":
     case "user":
     default:
@@ -158,10 +158,19 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
   const { profile } = useAuth();
 
   const currentUser: CourtUser | null = useMemo(() => {
-    if (!profile) return null;
+    if (!profile) {
+      console.log("⏳ RoleContext: Profile not yet loaded");
+      return null;
+    }
 
     const roleCategory = profile.role_category as RoleCategory;
     const role = mapRoleCategoryToCourtRole(roleCategory);
+
+    console.log("✅ RoleContext: User role mapped", {
+      roleCategory,
+      mappedRole: role,
+      userId: profile.id,
+    });
 
     // Map role category to display title
     const getTitleByRole = (roleCategory: string): string => {

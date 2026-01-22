@@ -14,7 +14,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { RoleProvider } from "@/contexts/RoleContext";
 import { Web3Provider } from "@/contexts/Web3Context";
 // Removed LoadingSpinner import as we are making auth checks instant
-// import { LoadingSpinner } from "@/components/ui/loading-spinner"; 
+// import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Header } from "@/components/layout/Header";
 
 // Pages
@@ -30,10 +30,10 @@ import JudgmentWriter from "./pages/JudgmentWriter";
 import EvidenceVault from "./pages/EvidenceVault";
 import CourtCalendar from "./pages/CourtCalendar";
 import Analytics from "./pages/Analytics";
-import SystemHealth from "./pages/SystemHealth";
 import NotFound from "./pages/NotFound";
 import NewFIR from "./pages/NewFIR";
 import FIRDetails from "./pages/FIRDetails";
+import { PoliceDashboard } from "./components/dashboard/PoliceDashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -105,12 +105,12 @@ const routes: RouteObject[] = [
     element: <ProtectedRoute />,
     children: [
       { path: "/dashboard", element: <Dashboard /> },
+      { path: "/police/dashboard", element: <PoliceDashboard /> },
       { path: "/cause-list", element: <CauseList /> },
       { path: "/judgment-writer", element: <JudgmentWriter /> },
       { path: "/evidence-vault", element: <EvidenceVault /> },
       { path: "/court-calendar", element: <CourtCalendar /> },
       { path: "/analytics", element: <Analytics /> },
-      { path: "/system-health", element: <SystemHealth /> },
       { path: "/courts", element: <Courts /> },
       { path: "/courts/:courtId/sections", element: <Sections /> },
       { path: "/sections/:sectionId/blocks", element: <CaseBlocks /> },
