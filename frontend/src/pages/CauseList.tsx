@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +45,7 @@ interface CauseItem {
 
 const CauseList = () => {
   const navigate = useNavigate();
+  const { profile } = useAuth(); // Add profile from useAuth
   const [causeList, setCauseList] = useState<CauseItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,13 +55,20 @@ const CauseList = () => {
 
   useEffect(() => {
     fetchCauseList();
-  }, []);
+  }, [profile?.id]); // Add profile.id dependency
 
   const fetchCauseList = async () => {
+    if (!profile?.id) {
+      console.log("Judge profile not available");
+      return;
+    }
+
     try {
+      // Fetch only cases assigned to this judge
       const { data: cases, error } = await supabase
         .from("cases")
         .select("id, case_number, title, status, case_type, party_a_name, party_b_name")
+        .eq("assigned_judge_id", profile.id) // Only this judge's cases
         .order("created_at", { ascending: false });
 
       if (error) throw error;

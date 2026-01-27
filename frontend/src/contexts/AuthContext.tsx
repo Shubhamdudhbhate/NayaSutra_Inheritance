@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // FETCH PROFILE: Now uses 'id' (Primary Key) instead of 'user_id'
   const fetchProfile = async (profileId: string) => {
-    try {
+    try {``
       const { data, error } = await supabase
         .from("profiles")
         .select("*")

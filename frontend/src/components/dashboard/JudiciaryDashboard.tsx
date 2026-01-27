@@ -115,6 +115,10 @@ export const JudiciaryDashboard = () => {
   // Fetch real cases from database
   useEffect(() => {
     const fetchCases = async () => {
+      if (!profile?.id) {
+        return;
+      }
+
       try {
         // Get today's date in ISO format
         const today = new Date();
@@ -125,10 +129,11 @@ export const JudiciaryDashboard = () => {
         tomorrow.setDate(tomorrow.getDate() + 1);
         const todayEnd = tomorrow.toISOString();
 
-        // Fetch cases with next hearing date today
+        // Fetch cases with next hearing date today, assigned to this judge only
         const { data: cases, error } = await supabase
           .from("cases")
           .select("id, case_number, title, status, case_type")
+          .eq("assigned_judge_id", profile.id) // Only this judge's cases
           .gte("next_hearing_date", todayStart)
           .lt("next_hearing_date", todayEnd)
           .order("created_at", { ascending: false });
@@ -153,7 +158,7 @@ export const JudiciaryDashboard = () => {
     };
 
     fetchCases();
-  }, []);
+  }, [profile?.id]); // Add profile.id dependency
 
   const handleOpenCaseFile = useCallback((id: string) => {
     navigate(`/cases/${id}`);

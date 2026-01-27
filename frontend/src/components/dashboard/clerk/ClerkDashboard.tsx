@@ -3,11 +3,13 @@ import { motion } from "framer-motion";
 import { Briefcase, ArrowLeft } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-
 // Components
 import { RegisterCaseForm } from "./RegisterCaseForm";
 import { SearchCase, CaseResult } from "./SearchCase"; 
 import { CaseManagementPanel } from "./CaseManagementPanel";
+import { NotificationTab } from "@/components/notifications/NotificationTab";
+import { UserNotifications } from "@/components/notifications/UserNotifications";
+
 
 export const ClerkDashboard = () => {
   const [activeTab, setActiveTab] = useState("cases");
@@ -46,12 +48,17 @@ export const ClerkDashboard = () => {
             Register new cases and manage case proceedings
           </p>
         </div>
+        <div className="relative">
+          <UserNotifications />
+        </div>
       </motion.div>
 
       <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setViewMode("list"); }} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2 mb-8 bg-white/5 border border-white/10 backdrop-blur-lg">
+        <TabsList className="grid w-full max-w-md grid-cols-3 mb-8 bg-white/5 border border-white/10 backdrop-blur-lg">
           <TabsTrigger value="register">Register Case</TabsTrigger>
           <TabsTrigger value="cases">My Cases</TabsTrigger>
+          <TabsTrigger value="notifications" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Notifications</TabsTrigger>
+
         </TabsList>
 
         <TabsContent value="register">
@@ -78,6 +85,10 @@ export const ClerkDashboard = () => {
               />
             </motion.div>
           )}
+        </TabsContent>
+
+        <TabsContent value="notifications">
+          <NotificationTab />
         </TabsContent>
       </Tabs>
     </div>

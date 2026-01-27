@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LogOut,
   Scale,
+  Bell
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,12 @@ export const NyaySutraSidebar = () => {
           icon: FolderOpen,
           path: "/lawyer/case-repository",
         },
+        {
+          id: "notifications",
+          label: "Notifications",
+          icon: Bell,
+          path: "/lawyer/notifications",
+        }
       ];
     } else {
       console.log("⚖️ NyaySutraSidebar: Rendering default/judge nav items (role:", currentUser?.role, ")");

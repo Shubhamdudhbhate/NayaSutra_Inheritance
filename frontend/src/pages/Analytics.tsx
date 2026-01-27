@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import {
   AreaChart,
@@ -36,6 +37,7 @@ import {
 } from "recharts";
 
 const Analytics = () => {
+  const { profile } = useAuth(); // Add profile from useAuth
   const [timeRange, setTimeRange] = useState("6months");
   const [, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -47,13 +49,20 @@ const Analytics = () => {
 
   useEffect(() => {
     fetchAnalytics();
-  }, [timeRange]);
+  }, [timeRange, profile?.id]); // Add profile.id dependency
 
   const fetchAnalytics = async () => {
+    if (!profile?.id) {
+      console.log("Judge profile not available for analytics");
+      return;
+    }
+
     try {
+      // Fetch only cases assigned to this judge
       const { data: cases, error } = await supabase
         .from("cases")
-        .select("id, status, created_at, updated_at");
+        .select("id, status, created_at, updated_at")
+        .eq("assigned_judge_id", profile.id); // Only this judge's cases
 
       if (error) throw error;
 

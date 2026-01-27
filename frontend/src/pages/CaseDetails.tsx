@@ -52,6 +52,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { createSessionEndNotifications } from "@/services/notificationServiceDatabase";
+import { NotificationDemo } from "@/components/notifications";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { ScheduleHearingDialog } from "@/components/ScheduleHearingDialog";
@@ -102,6 +104,7 @@ const CaseDetails = () => {
   const [lastSavedNotes, setLastSavedNotes] = useState<Date | null>(null);
   const [hasNotesChanges, setHasNotesChanges] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
+  const [showDemo, setShowDemo] = useState(false);
 
   // Auto-save effect for notes
   useEffect(() => {
@@ -262,15 +265,52 @@ const CaseDetails = () => {
 
   const handleEndSession = async () => {
     const confirmed = window.confirm(
-      "End the court session? Any unsaved notes will be lost.",
+      "End the court session? This will:\n\n1. Send notifications to all case participants (clerk + lawyers)\n2. Request confirmations from all participants\n3. Enable blockchain signing after all confirmations\n\nContinue?",
     );
     if (confirmed) {
-      const success = await courtSession.endSession(sessionNotes);
-      if (success) {
+      try {
+        // 1. End session in database
+        const success = await courtSession.endSession(sessionNotes);
+        if (!success) {
+          toast.error("Failed to end session");
+          return;
+        }
+
+        // 2. Get case participants and send notifications
+        if (courtSession.activeSession && caseData && profile) {
+          console.log("🔄 Starting comprehensive notification flow...");
+          
+          // Send notifications to all participants
+          const notificationSuccess = await createSessionEndNotifications({
+            caseId: id!,
+            sessionId: courtSession.activeSession.id,
+            judgeId: profile.id,
+            caseNumber: caseData.case_number || 'Unknown',
+            endedAt: new Date().toISOString(),
+            notes: sessionNotes || undefined
+          });
+
+          if (notificationSuccess) {
+            // 3. Show the interactive demo for confirmation flow
+            setShowDemo(true);
+            
+            toast.success("Session ended! Notifications sent to participants. See confirmation flow below.", {
+              duration: 5000,
+              description: `Case: ${caseData.case_number} | Participants will confirm and then you'll sign on blockchain.`
+            });
+          } else {
+            toast.error("Session ended but notification failed");
+          }
+        }
+
+        // 4. Update UI
         setSessionNotes("");
         setLastSavedNotes(null);
         setHasNotesChanges(false);
-        toast.success("Court session ended.");
+
+      } catch (error) {
+        console.error('Error ending session:', error);
+        toast.error("Failed to end session");
       }
     }
   };
@@ -456,9 +496,10 @@ const CaseDetails = () => {
               <Button
                 onClick={handleEndSession}
                 className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-medium"
+                title="End session and send notifications to all participants"
               >
                 <Square className="w-4 h-4 mr-2" />
-                End Session
+                End Session & Send Notifications
               </Button>
             </>
           )}
@@ -688,6 +729,22 @@ const CaseDetails = () => {
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Notification Demo - Shows when session ends */}
+                {showDemo && (
+                  <div className="mt-6">
+                    <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200">
+                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                        <span className="font-medium">Session End Notification Flow Active</span>
+                      </div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        Triggered by ending the court session. Participants will confirm, then judge will sign on blockchain.
+                      </p>
+                    </div>
+                    <NotificationDemo />
+                  </div>
+                )}
 
                 {/* Filters */}
                 <Card className="card-glass border-border/50">

@@ -15,6 +15,8 @@ import { GlassCard } from "@/components/layout/GlassWrapper";
 import { PendingSignatures } from "./PendingSignatures";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
+import { UserNotifications } from "@/components/notifications/UserNotifications";
+import { NotificationTab } from "@/components/notifications/NotificationTab";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -142,9 +144,12 @@ export const PractitionerDashboard = () => {
             Manage your cases and evidence uploads
           </p>
         </div>
+        <div className="relative">
+          <UserNotifications />
+        </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Upload Tracker */}
         <GlassCard className="p-6">
           <div className="flex items-center justify-between mb-4">
@@ -194,6 +199,9 @@ export const PractitionerDashboard = () => {
             </div>
           )}
         </GlassCard>
+
+        {/* Notifications Tab */}
+        <NotificationTab />
 
         {/* Pending Signatures */}
         <PendingSignatures

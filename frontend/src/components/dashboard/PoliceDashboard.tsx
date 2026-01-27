@@ -15,8 +15,11 @@ import { getFIRCounts, listFIRs } from "@/services/policeService";
 import { FIR } from "@/types/case";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { UserNotifications } from "@/components/notifications/UserNotifications";
+import { NotificationTab } from "@/components/notifications/NotificationTab";
 
 export const PoliceDashboard = () => {
   const [counts, setCounts] = useState({ total: 0, pending: 0 });
@@ -137,12 +140,17 @@ export const PoliceDashboard = () => {
                 Manage FIR records and investigation cases
               </p>
             </div>
-            <Link to="/police/new-fir">
-              <Button className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg shadow-emerald-500/20 flex items-center gap-2">
-                <Plus className="w-5 h-5" />
-                New FIR
-              </Button>
-            </Link>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <UserNotifications />
+              </div>
+              <Link to="/police/new-fir">
+                <Button className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg shadow-emerald-500/20 flex items-center gap-2">
+                  <Plus className="w-5 h-5" />
+                  New FIR
+                </Button>
+              </Link>
+            </div>
           </motion.div>
 
           {/* Stats Grid */}
@@ -250,68 +258,55 @@ export const PoliceDashboard = () => {
                     placeholder="Search by FIR number or offense..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-500"
+                    className="pl-10 bg-white/5 border-white/10 backdrop-blur-sm text-white placeholder:text-slate-400"
                   />
                 </div>
               </div>
 
-              {filteredFirs.length === 0
-                ? (
-                  <div className="py-12 text-center">
-                    <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                    <p className="text-slate-400 text-lg">No FIRs found</p>
-                    <p className="text-slate-500 text-sm">
-                      Create a new FIR to get started
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {filteredFirs.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                    <p className="text-slate-400">
+                      {searchTerm ? "No FIRs found matching your search" : "No FIRs registered yet"}
                     </p>
                   </div>
-                )
-                : (
-                  <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                    {filteredFirs.map((fir, idx) => {
-                      const dateStr = fir?.incident_date
-                        ? new Date(fir.incident_date).toLocaleDateString()
-                        : "-";
-                      return (
-                        <motion.div
-                          key={fir.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: idx * 0.05 }}
-                          onClick={() => navigate(`/police/firs/${fir.id}`)}
-                          className="p-4 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-emerald-500/30 transition-all cursor-pointer group"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="font-semibold text-white group-hover:text-emerald-300 transition-colors">
-                                  {fir?.fir_number ?? "N/A"}
-                                </h3>
-                                <span
-                                  className={cn(
-                                    "px-3 py-1 rounded-full text-xs font-medium border flex items-center gap-1",
-                                    getStatusColor(fir?.status),
-                                  )}
-                                >
-                                  {getStatusIcon(fir?.status)}
-                                  {fir?.status ?? "Unknown"}
-                                </span>
-                              </div>
-                              <p className="text-sm text-slate-400 mb-2">
-                                {fir?.offense_nature ?? "N/A"}
-                              </p>
-                              <div className="flex items-center gap-4 text-xs text-slate-500">
-                                <span>📅 {dateStr}</span>
-                              </div>
-                            </div>
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <FileText className="w-5 h-5 text-emerald-400" />
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
+                ) : (
+                  filteredFirs.map((fir) => (
+                    <motion.div
+                      key={fir.id}
+                      variants={itemVariants}
+                      className="p-4 rounded-lg border border-white/10 hover:border-emerald-500/30 transition-all cursor-pointer"
+                      onClick={() => navigate(`/police/fir/${fir.id}`)}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-emerald-400" />
+                          <span className="font-medium text-white">
+                            {fir.fir_number}
+                          </span>
+                        </div>
+                        <Badge className={cn("text-xs", getStatusColor(fir.status))}>
+                          {getStatusIcon(fir.status)}
+                          <span className="ml-1">{fir.status}</span>
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-slate-300 mb-2">
+                        {fir.offense_nature}
+                      </p>
+                      <div className="flex items-center justify-between text-xs text-slate-400">
+                        <span>Victim: {fir.victim_name}</span>
+                        <span>{new Date(fir.incident_date).toLocaleDateString()}</span>
+                      </div>
+                    </motion.div>
+                  ))
                 )}
+              </div>
+            </motion.div>
+
+            {/* Notifications Tab */}
+            <motion.div variants={itemVariants}>
+              <NotificationTab />
             </motion.div>
 
             {/* Quick Stats & Info */}
