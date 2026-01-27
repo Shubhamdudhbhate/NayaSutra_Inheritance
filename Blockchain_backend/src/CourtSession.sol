@@ -141,6 +141,7 @@ contract CourtSession {
         address _lawyer,
         string calldata _role
     ) external onlyClerk {
+        require(cases[_caseId].creationDate != 0, "Case does not exist");
         require(accessControl.isLawyer(_lawyer), "User is not a Lawyer");
         require(
             isAssignedLawyer[_caseId][_role] != _lawyer,
@@ -154,11 +155,11 @@ contract CourtSession {
         } else if (keccak256(bytes(_role)) == keccak256("prosecution")) {
             cases[_caseId].prosecution = _lawyer;
         }
-
         emit LawyerAssigned(_caseId, _lawyer, _role);
     }
 
     function assignJudge(uint256 _caseId, address _judge) external onlyClerk {
+        require(cases[_caseId].creationDate != 0, "Case does not exist");
         require(accessControl.isJudge(_judge), "User is not a Judge");
         cases[_caseId].assignedJudge = _judge;
         emit JudgeAssigned(_caseId, _judge);

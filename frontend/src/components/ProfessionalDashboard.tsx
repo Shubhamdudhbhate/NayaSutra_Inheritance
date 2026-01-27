@@ -22,7 +22,7 @@ import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NyaySutraSidebar } from "@/components/dashboard/NyaySutraSidebar";
 import { RegisterCaseForm } from "@/components/dashboard/clerk/RegisterCaseForm";
-import { SearchCase } from "@/components/dashboard/clerk/SearchCase";
+import { SearchCase } from "@/components/dashboard/clerk/SearchCase1";
 import { CaseManagementPanel } from "@/components/dashboard/clerk/CaseManagementPanel";
 
 const ProfessionalDashboard = () => {

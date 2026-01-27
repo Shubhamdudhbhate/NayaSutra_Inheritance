@@ -1,38 +1,31 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Briefcase, Search } from "lucide-react";
-import { RegisterCaseForm } from "./RegisterCaseForm";
-import { SearchCase } from "./SearchCase";
-import { CaseManagementPanel } from "./CaseManagementPanel";
+import { Briefcase, ArrowLeft } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { GlassCard } from "@/components/layout/GlassWrapper";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+
+// Components
+import { RegisterCaseForm } from "./RegisterCaseForm";
+import { SearchCase, CaseResult } from "./SearchCase"; 
+import { CaseManagementPanel } from "./CaseManagementPanel";
 
 export const ClerkDashboard = () => {
-  const [manageCaseId, setManageCaseId] = useState("");
-  const [activeCaseData, setActiveCaseData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("cases");
+  
+  // Navigation State
+  const [viewMode, setViewMode] = useState<"list" | "manage">("list");
+  const [selectedCase, setSelectedCase] = useState<CaseResult & { fir_id?: string } | null>(null);
 
-  const fetchCaseToManage = async () => {
-    if (!manageCaseId) return;
-    setIsLoading(true);
-    const { data, error } = await supabase
-      .from('cases')
-      .select('*, assigned_judge:assigned_judge_id(full_name)')
-      .or(`case_number.eq.${manageCaseId},unique_identifier.eq.${manageCaseId}`)
-      .maybeSingle();
+  // Handlers
+  const handleCaseSelect = async (caseData: CaseResult & { fir_id?: string }) => {
+    setSelectedCase(caseData);
+    // Directly go to manage view, skip details
+    setViewMode("manage");
+  };
 
-    if (error || !data) {
-      toast.error("Case not found");
-      setActiveCaseData(null);
-    } else {
-      setActiveCaseData(data);
-    }
-    setIsLoading(false);
+  const handleBack = () => {
+    setViewMode("list");
+    setSelectedCase(null);
   };
 
   return (
@@ -55,63 +48,35 @@ export const ClerkDashboard = () => {
         </div>
       </motion.div>
 
-      <Tabs defaultValue="register" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-8 bg-white/5 border border-white/10 backdrop-blur-lg">
-          <TabsTrigger value="register" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Register Case</TabsTrigger>
-          <TabsTrigger value="search" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Search Case</TabsTrigger>
-          <TabsTrigger value="manage" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Case Management</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setViewMode("list"); }} className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2 mb-8 bg-white/5 border border-white/10 backdrop-blur-lg">
+          <TabsTrigger value="register">Register Case</TabsTrigger>
+          <TabsTrigger value="cases">My Cases</TabsTrigger>
         </TabsList>
 
         <TabsContent value="register">
           <RegisterCaseForm />
         </TabsContent>
 
-        <TabsContent value="search">
-          <SearchCase />
-        </TabsContent>
+        <TabsContent value="cases">
+          {viewMode === "list" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <SearchCase onSelectCase={handleCaseSelect} showMyCasesOnly={true} />
+            </motion.div>
+          )}
 
-        <TabsContent value="manage">
-          {!activeCaseData ? (
-            <GlassCard className="p-8 text-center space-y-6">
-              <div className="p-4 rounded-full bg-blue-500/10 w-fit mx-auto">
-                <Briefcase className="w-12 h-12 text-blue-400" />
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold mb-2">Load Case to Manage</h3>
-                <p className="text-muted-foreground mb-4">
-                  Enter a Case Number or FIR ID to load and manage a case
-                </p>
-              </div>
-              <div className="flex max-w-md mx-auto gap-3">
-                <Input 
-                  placeholder="Enter Case Number (e.g. CASE-2026-001)" 
-                  value={manageCaseId}
-                  onChange={(e) => setManageCaseId(e.target.value)}
-                  className="h-12 bg-white/5 border-white/10 backdrop-blur-sm"
-                />
-                <Button 
-                  onClick={fetchCaseToManage} 
-                  disabled={isLoading}
-                  className="h-12 px-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/20"
-                >
-                  {isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : <Search className="w-5 h-5" />}
+          {viewMode === "manage" && selectedCase && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="mb-4">
+                <Button variant="ghost" onClick={handleBack} className="text-slate-400 hover:text-white pl-0">
+                  <ArrowLeft className="w-5 h-5 mr-2" /> Back to List
                 </Button>
               </div>
-            </GlassCard>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-semibold">Managing Case: {activeCaseData.case_number}</h2>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setActiveCaseData(null)}
-                  className="border-white/10 bg-white/5 hover:bg-white/10"
-                >
-                  Change Case
-                </Button>
-              </div>
-              <CaseManagementPanel caseData={activeCaseData} />
-            </div>
+              <CaseManagementPanel 
+                caseData={selectedCase as any} 
+                onCaseUpdate={() => console.log("Case Updated")}
+              />
+            </motion.div>
           )}
         </TabsContent>
       </Tabs>

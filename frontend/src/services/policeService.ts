@@ -115,7 +115,7 @@ export const getFIRByNumber = async (firNumber: string): Promise<FIR | null> => 
   const { data, error } = await supabase
     .from('firs')
     .select('*')
-    .eq('id', firNumber)
+    .eq('fir_number', firNumber)
     .maybeSingle(); // Returns null if not found, instead of throwing error
 
   if (error) throw error;
