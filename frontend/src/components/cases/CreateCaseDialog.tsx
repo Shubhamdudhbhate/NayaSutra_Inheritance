@@ -123,11 +123,13 @@ export const CreateCaseDialog = ({
           case_number: caseNumber,
           title: data.title.trim(),
           description: data.description?.trim() || null,
-          unique_identifier: caseNumber,
+          blockchain_tx_hash: "", // TODO: Generate actual blockchain transaction hash
+          on_chain_case_id: caseNumber, // Using case number as on-chain ID for now
           case_type: "civil" as const,
           party_a_name: data.plaintiffName.trim(),
           party_b_name: data.defendantName.trim(),
           assigned_judge_id: data.judgeId,
+          clerk_id: data.clerkId,
           status: "pending" as const,
         });
 

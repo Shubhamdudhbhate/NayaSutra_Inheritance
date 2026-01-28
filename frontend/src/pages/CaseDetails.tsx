@@ -53,7 +53,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { createSessionEndNotifications } from "@/services/notificationServiceDatabase";
-import { NotificationDemo } from "@/components/notifications";
+import { NotificationDetailModal } from "@/components/notifications/NotificationDetailModal";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { ScheduleHearingDialog } from "@/components/ScheduleHearingDialog";
@@ -104,7 +104,78 @@ const CaseDetails = () => {
   const [lastSavedNotes, setLastSavedNotes] = useState<Date | null>(null);
   const [hasNotesChanges, setHasNotesChanges] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
-  const [showDemo, setShowDemo] = useState(false);
+
+  // Judge modal state
+  const [showJudgeModal, setShowJudgeModal] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    is_read: boolean;
+    created_at: string;
+    confirmed_at?: string | null;
+    confirmed_by?: string | null;
+    requires_confirmation?: boolean;
+    user_id: string;
+    type?: string;
+    metadata?: any;
+    signature?: string | null;
+  } | null>(null);
+  const [isSigning, setIsSigning] = useState(false);
+  const [signingStatus, setSigningStatus] = useState<any[]>([]);
+  const [allPartiesSigned, setAllPartiesSigned] = useState(false);
+
+  // Real-time listener for signature updates
+  useEffect(() => {
+    if (!showJudgeModal || !selectedNotification) return;
+
+    const sessionId = selectedNotification.metadata?.sessionId;
+    if (!sessionId) return;
+
+    // Subscribe to real-time signature updates
+    const subscription = supabase
+      .channel(`session-signatures-${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `metadata->>sessionId=eq.${sessionId}`
+        },
+        (payload) => {
+          console.log('🔄 Real-time signature update:', payload);
+          
+          const updatedNotification = payload.new as any;
+          const userId = updatedNotification.user_id;
+          
+          // Update signing status
+          setSigningStatus(prev => 
+            prev.map(signer => 
+              signer.userId === userId 
+                ? { 
+                    ...signer, 
+                    signed: !!updatedNotification.signature, 
+                    signedAt: updatedNotification.confirmed_at 
+                  }
+                : signer
+            )
+          );
+
+          // Check if all parties have signed
+          setSigningStatus(current => {
+            const allSigned = current.every(signer => signer.signed);
+            setAllPartiesSigned(allSigned);
+            return current;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [showJudgeModal, selectedNotification]);
 
   // Auto-save effect for notes
   useEffect(() => {
@@ -291,12 +362,43 @@ const CaseDetails = () => {
           });
 
           if (notificationSuccess) {
-            // 3. Show the interactive demo for confirmation flow
-            setShowDemo(true);
+            // 3. Create judge notification object and show modal
+            const judgeNotification = {
+              id: `judge-${courtSession.activeSession.id}`,
+              title: `Session Confirmation Required - ${caseData.case_number}`,
+              message: `Court session for case ${caseData.case_number} has ended. Please review details and finalize after all parties confirm.`,
+              type: 'session_ended',
+              is_read: false,
+              created_at: new Date().toISOString(),
+              requires_confirmation: true,
+              user_id: profile.id,
+              metadata: {
+                caseId: id!,
+                sessionId: courtSession.activeSession.id,
+                caseNumber: caseData.case_number,
+                endedAt: new Date().toISOString(),
+                notes: sessionNotes || undefined,
+                verdict: "Verdict will be added here...",
+                evidence: [],
+                transcript: sessionNotes || "Session transcript will be available here..."
+              }
+            };
+
+            // Initialize signing status for judge modal
+            const initialSigningStatus = [
+              { userId: caseData.lawyer_party_a_id, userName: lawyerAName || "Lawyer A", role: "Lawyer (Plaintiff)", signed: false },
+              { userId: caseData.lawyer_party_b_id, userName: lawyerBName || "Lawyer B", role: "Lawyer (Defendant)", signed: false },
+              { userId: caseData.assigned_judge_id, userName: profile.full_name || "Judge", role: "Judge", signed: false }
+            ].filter(person => person.userId); // Filter out null values
+
+            setSelectedNotification(judgeNotification);
+            setSigningStatus(initialSigningStatus);
+            setAllPartiesSigned(false);
+            setShowJudgeModal(true);
             
-            toast.success("Session ended! Notifications sent to participants. See confirmation flow below.", {
+            toast.success("Session ended! Review details and monitor signing progress.", {
               duration: 5000,
-              description: `Case: ${caseData.case_number} | Participants will confirm and then you'll sign on blockchain.`
+              description: `Case: ${caseData.case_number} | Modal opened for judge review.`
             });
           } else {
             toast.error("Session ended but notification failed");
@@ -312,6 +414,28 @@ const CaseDetails = () => {
         console.error('Error ending session:', error);
         toast.error("Failed to end session");
       }
+    }
+  };
+
+  const handleJudgeSign = async () => {
+    if (!profile) return;
+    
+    setIsSigning(true);
+    try {
+      // Here you would implement the actual signing logic
+      // For now, we'll simulate it
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Update the notification as signed
+      setSelectedNotification(prev => prev ? { ...prev, is_read: true, signature: "signed" } : null);
+      
+      toast.success("Session finalized successfully!");
+      setShowJudgeModal(false);
+    } catch (error) {
+      console.error('Error signing:', error);
+      toast.error("Failed to finalize session");
+    } finally {
+      setIsSigning(false);
     }
   };
 
@@ -730,21 +854,6 @@ const CaseDetails = () => {
                   </Card>
                 </div>
 
-                {/* Notification Demo - Shows when session ends */}
-                {showDemo && (
-                  <div className="mt-6">
-                    <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <div className="flex items-center gap-2 text-sm text-blue-800 dark:text-blue-200">
-                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                        <span className="font-medium">Session End Notification Flow Active</span>
-                      </div>
-                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                        Triggered by ending the court session. Participants will confirm, then judge will sign on blockchain.
-                      </p>
-                    </div>
-                    <NotificationDemo />
-                  </div>
-                )}
 
                 {/* Filters */}
                 <Card className="card-glass border-border/50">
@@ -1177,6 +1286,22 @@ const CaseDetails = () => {
         onSuccess={() => {
           toast.success("Hearing scheduled successfully");
         }}
+      />
+
+      {/* Judge Notification Detail Modal */}
+      <NotificationDetailModal
+        notification={selectedNotification}
+        isOpen={showJudgeModal}
+        onClose={() => {
+          setShowJudgeModal(false);
+          setSelectedNotification(null);
+        }}
+        onSign={handleJudgeSign}
+        isSigning={isSigning}
+        sessionStatus="final_submission"
+        signingStatus={signingStatus}
+        isJudge={true}
+        allPartiesSigned={allPartiesSigned}
       />
     </div>
   );

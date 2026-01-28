@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CheckCircle, XCircle, AlertCircle, Play, Database, Users, Bell, Radio } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, AlertCircle, Play, Database, Users, Bell } from 'lucide-react';
 import { 
   runCompleteNotificationTest, 
   quickNotificationTest,
   NotificationTestReport,
   TestResult 
 } from '@/services/notificationTestFramework';
+import { SessionEndNotificationTest } from './SessionEndNotificationTest';
 
 export const NotificationTestDashboard = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -76,7 +77,7 @@ export const NotificationTestDashboard = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -154,6 +155,8 @@ export const NotificationTestDashboard = () => {
             </Button>
           </CardContent>
         </Card>
+
+        <SessionEndNotificationTest />
       </div>
 
       {/* Test Results */}

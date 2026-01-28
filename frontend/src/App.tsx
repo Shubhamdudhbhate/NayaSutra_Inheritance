@@ -16,7 +16,7 @@ import { Web3Provider } from "@/contexts/Web3Context";
 // Removed LoadingSpinner import as we are making auth checks instant
 // import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Header } from "@/components/layout/Header";
-import { NotificationTab } from "./components/notifications/NotificationTab";
+import LawyerNotifications from "./pages/LawyerNotifications";
 
 // Pages
 import Landing from "./pages/Landing";
@@ -121,7 +121,7 @@ const routes: RouteObject[] = [
       { path: "/cases/:id", element: <CaseDetails /> },
       { path: "/lawyer/today-cases", element: <TodayCases /> },
       { path: "/lawyer/case-repository", element: <CaseRepository /> },
-      { path: "/lawyer/notifications", element: <NotificationTab /> },
+      { path: "/lawyer/notifications", element: <LawyerNotifications /> },
       { path: "/police/new-fir", element: <NewFIR /> },
       { path: "/police/firs/:id", element: <FIRDetails /> },
     ],

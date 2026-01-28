@@ -54,6 +54,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRole } from "@/contexts/RoleContext";
+import { createSessionEndNotifications } from "@/services/notificationService";
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -533,8 +534,22 @@ export function JudgeSessionManager({
 
     setIsTransferring(true);
     try {
+      // 1. Send session end notifications first
+      const sessionId = `session_${Date.now()}_${caseId.substring(0, 8)}`;
+      const caseNumber = `CASE-${caseId.substring(0, 6).toUpperCase()}`;
+      
+      await createSessionEndNotifications({
+        caseId,
+        sessionId,
+        judgeId: currentJudgeId,
+        caseNumber,
+        endedAt: new Date().toISOString(),
+        notes: "Case transferred to another judge"
+      });
+
+      // 2. Then transfer the case
       await apiService.transferCase(caseId, selectedTransferJudge);
-      toast.success("Case transferred successfully");
+      toast.success("Case transferred successfully and notifications sent to participants");
       setTransferModalOpen(false);
       setSelectedTransferJudge("");
 

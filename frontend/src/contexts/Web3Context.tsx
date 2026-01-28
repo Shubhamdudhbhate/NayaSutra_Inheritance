@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { BrowserProvider, Signer } from 'ethers';
 import { toast } from 'sonner';
 
 interface Web3ContextType {
   address: string | null;
   isConnected: boolean;
   isConnecting: boolean;
-  isSigning: boolean; // Added missing state
+  isSigning: boolean;
+  signer: Signer | null;
   connect: () => Promise<void>;
   disconnect: () => void;
   signMessage: (message: string) => Promise<string | null>;
@@ -15,17 +17,21 @@ const Web3Context = createContext<Web3ContextType | undefined>(undefined);
 
 export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [address, setAddress] = useState<string | null>(null);
+  const [signer, setSigner] = useState<Signer | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
 
-  // 1. AUTO-DETECT ON LOAD (The missing piece)
+  // 1. AUTO-DETECT ON LOAD using BrowserProvider
   useEffect(() => {
     const checkConnection = async () => {
       if (typeof window !== 'undefined' && (window as any).ethereum) {
         try {
-          const accounts = await (window as any).ethereum.request({ method: 'eth_accounts' });
+          const provider = new BrowserProvider((window as any).ethereum);
+          const accounts = await provider.send("eth_accounts", []);
           if (accounts.length > 0) {
+            const signerInstance = await provider.getSigner();
             setAddress(accounts[0]);
+            setSigner(signerInstance);
           }
         } catch (error) {
           console.error("Error checking wallet connection:", error);
@@ -37,11 +43,15 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. LISTEN FOR ACCOUNT CHANGES (User switches wallet in MetaMask)
     if ((window as any).ethereum) {
-      (window as any).ethereum.on('accountsChanged', (accounts: string[]) => {
+      (window as any).ethereum.on('accountsChanged', async (accounts: string[]) => {
         if (accounts.length > 0) {
+          const provider = new BrowserProvider((window as any).ethereum);
+          const signerInstance = await provider.getSigner();
           setAddress(accounts[0]);
+          setSigner(signerInstance);
         } else {
           setAddress(null);
+          setSigner(null);
           toast.info("Wallet disconnected");
         }
       });
@@ -63,10 +73,14 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setIsConnecting(true);
     try {
-      const accounts = await (window as any).ethereum.request({
-        method: 'eth_requestAccounts',
-      });
-      setAddress(accounts[0]);
+      // Use BrowserProvider approach as requested
+      const provider = new BrowserProvider((window as any).ethereum);
+      await provider.send("eth_requestAccounts", []);
+      const signerInstance = await provider.getSigner();
+      const userAddress = await signerInstance.getAddress();
+      
+      setAddress(userAddress);
+      setSigner(signerInstance);
       toast.success('Wallet connected successfully');
     } catch (error: any) {
       toast.error(error.message || 'Failed to connect wallet');
@@ -77,21 +91,19 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const disconnect = () => {
     setAddress(null);
+    setSigner(null);
     toast.info('Wallet disconnected');
   };
 
   const signMessage = async (message: string): Promise<string | null> => {
-    if (!address) {
+    if (!address || !signer) {
       toast.error("Wallet not connected");
       return null;
     }
     
     setIsSigning(true);
     try {
-      const signature = await (window as any).ethereum.request({
-        method: "personal_sign",
-        params: [message, address],
-      });
+      const signature = await signer.signMessage(message);
       return signature;
     } catch (error: any) {
       console.error("Signing error:", error);
@@ -107,7 +119,8 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       address, 
       isConnected: !!address, 
       isConnecting, 
-      isSigning, // Make sure to export this
+      isSigning,
+      signer,
       connect, 
       disconnect,
       signMessage 

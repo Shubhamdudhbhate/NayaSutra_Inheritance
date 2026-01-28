@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
-import { Bell, Check, Clock, AlertCircle, Trash2, Eye, EyeOff } from "lucide-react";
+import { Bell, Check, Clock, AlertCircle, Trash2, Eye, EyeOff, PenTool } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWeb3 } from "@/contexts/Web3Context";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { NotificationDetailModal } from "./NotificationDetailModal";
 
 interface Notification {
   id: string;
@@ -19,6 +21,9 @@ interface Notification {
   confirmed_by?: string | null;
   requires_confirmation?: boolean;
   user_id: string;
+  type?: string;
+  metadata?: any;
+  signature?: string | null;
 }
 
 interface NotificationTabProps {
@@ -27,10 +32,14 @@ interface NotificationTabProps {
 
 export const NotificationTab = ({ className }: NotificationTabProps) => {
   const { profile } = useAuth();
+  const { connect, isConnected, signMessage } = useWeb3();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
+  const [isSigning, setIsSigning] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Fetch notifications for current user only
   const fetchNotifications = async () => {
@@ -186,31 +195,172 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
     }
   };
 
-  const markAllAsRead = async () => {
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!profile?.id) return;
+    
+    // Open modal for notifications that require confirmation or have detailed information
+    if (!notification.is_read) {
+      setSelectedNotification(notification);
+      setIsModalOpen(true);
+      return;
+    }
+    
+  };
+
+  const handleModalSign = async (notification: Notification) => {
     if (!profile?.id) return;
 
+    // Check if wallet is connected
+    if (!isConnected) {
+      try {
+        await connect();
+      } catch (error) {
+        toast.error("Failed to connect wallet");
+        return;
+      }
+    }
+
+    setIsSigning(true);
     try {
+      // Prepare message to sign
+      const messageToSign = JSON.stringify({
+        notificationId: notification.id,
+        caseId: notification.metadata?.caseId,
+        sessionId: notification.metadata?.sessionId,
+        caseNumber: notification.metadata?.caseNumber,
+        userId: profile.id,
+        timestamp: new Date().toISOString(),
+        action: 'SESSION_CONFIRMATION'
+      });
+
+      // Sign with MetaMask
+      const signature = await signMessage(messageToSign);
+      
+      if (!signature) {
+        throw new Error("Failed to sign notification");
+      }
+
+      // Store signature in database
       const { error } = await supabase
         .from("notifications")
-        .update({ is_read: true })
-        .eq("user_id", profile.id)
-        .eq("is_read", false);
+        .update({ 
+          signature: signature,
+          confirmed_at: new Date().toISOString(),
+          confirmed_by: profile.id,
+          is_read: true
+        })
+        .eq("id", notification.id);
 
       if (error) {
-        console.error("Error marking all notifications as read:", error);
-        toast.error("Failed to mark all notifications as read");
-        return;
+        throw error;
       }
 
       // Update local state
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, is_read: true }))
+      setNotifications(prev => 
+        prev.map(n => n.id === notification.id 
+          ? { 
+              ...n, 
+              signature: signature,
+              confirmed_at: new Date().toISOString(),
+              confirmed_by: profile.id,
+              is_read: true 
+            }
+          : n
+        )
       );
-      setUnreadCount(0);
-      toast.success("All notifications marked as read");
+
+      // Update unread count
+      if (!notification.is_read) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+
+      toast.success("Notification signed successfully");
+
+      // Check if all parties have signed this session
+      await checkAllPartiesSigned(notification);
+
+      // Close modal after successful signing
+      setIsModalOpen(false);
+      setSelectedNotification(null);
+
     } catch (error) {
-      console.error("Error marking all notifications as read:", error);
-      toast.error("Failed to mark all notifications as read");
+      console.error("Error signing notification:", error);
+      toast.error("Failed to sign notification");
+    } finally {
+      setIsSigning(false);
+    }
+  };
+
+  const checkAllPartiesSigned = async (notification: Notification) => {
+    if (!notification.metadata?.caseId || !notification.created_at) return;
+
+    try {
+      // Get all notifications for this case created at the same time (same session)
+      const { data: sessionNotifications, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("metadata->>caseId", notification.metadata.caseId)
+        .eq("type", "session_ended")
+        .eq("requires_confirmation", true);
+
+      if (error) {
+        console.error("Error checking session notifications:", error);
+        return;
+      }
+
+      console.log('🔍 Session notifications for case:', notification.metadata.caseId, sessionNotifications);
+
+      // Group by creation timestamp (within 1 minute window) to identify the same session
+      const sessionTime = new Date(notification.created_at);
+      const sameSessionNotifications = sessionNotifications?.filter(n => {
+        if (!n.created_at) return false;
+        const notificationTime = new Date(n.created_at);
+        const timeDiff = Math.abs(sessionTime.getTime() - notificationTime.getTime());
+        return timeDiff < 60000; // Within 1 minute = same session
+      }) || [];
+
+      console.log('📋 Same session notifications:', sameSessionNotifications);
+
+      const totalRequired = sameSessionNotifications.length;
+      const signedCount = sameSessionNotifications.filter(n => n.signature).length;
+
+      console.log('✍️ Signing status:', { totalRequired, signedCount });
+
+      if (totalRequired > 0 && signedCount === totalRequired) {
+        toast.success(`🎉 All parties have signed the session! (${signedCount}/${totalRequired})`);
+        
+        // Here you can trigger the next workflow step
+        await triggerNextWorkflow(notification.metadata.caseId, notification.metadata?.sessionId);
+      } else {
+        toast.info(`Signing progress: ${signedCount}/${totalRequired} parties have signed`);
+      }
+
+    } catch (error) {
+      console.error("Error checking all parties signed:", error);
+    }
+  };
+
+  const triggerNextWorkflow = async (caseId: string, sessionId?: string) => {
+    try {
+      console.log('🚀 Triggering next workflow for case:', caseId, 'session:', sessionId);
+      
+      // Update case status or trigger next step in your workflow
+      const { error } = await supabase
+        .from('cases')
+        .update({ 
+          status: 'active', // Use valid status from enum
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', caseId);
+
+      if (error) {
+        console.error("Error updating case status:", error);
+      } else {
+        toast.success("Case status updated - session confirmed!");
+      }
+
+    } catch (error) {
+      console.error("Error triggering next workflow:", error);
     }
   };
 
@@ -241,6 +391,12 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
   };
 
   const getNotificationIcon = (notification: Notification) => {
+    if (notification.signature) {
+      return <Check className="w-4 h-4 text-green-500" />;
+    }
+    if ((notification.type === 'session_ended' || (!notification.type && notification.requires_confirmation)) && notification.requires_confirmation) {
+      return <PenTool className="w-4 h-4 text-orange-500" />;
+    }
     if (notification.requires_confirmation) {
       return <AlertCircle className="w-4 h-4 text-orange-500" />;
     }
@@ -287,7 +443,8 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
   }
 
   return (
-    <Card className={className}>
+    <>
+      <Card className={className}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -299,16 +456,6 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
               </Badge>
             )}
           </CardTitle>
-          {unreadCount > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={markAllAsRead}
-              className="text-xs"
-            >
-              Mark all read
-            </Button>
-          )}
         </div>
         <CardDescription>
           {unreadCount > 0 
@@ -347,8 +494,13 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
                   {filteredNotifications.map((notification) => (
                     <div
                       key={notification.id}
-                      className={`p-4 border rounded-lg transition-colors ${
-                        !notification.is_read ? 'bg-blue-50/50 border-blue-200' : 'bg-muted/30'
+                      onClick={() => handleNotificationClick(notification)}
+                      className={`p-4 border rounded-lg transition-colors cursor-pointer ${
+                        !notification.is_read ? 'bg-blue-50/50 border-blue-200 hover:bg-blue-100/50' : 'bg-muted/30 hover:bg-muted/50'
+                      } ${
+                        (notification.type === 'session_ended' || (!notification.type && notification.requires_confirmation)) && notification.requires_confirmation && !notification.signature 
+                          ? 'ring-2 ring-orange-200 hover:ring-orange-300' 
+                          : ''
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -368,7 +520,10 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => markAsRead(notification.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markAsRead(notification.id);
+                                  }}
                                   className="h-6 w-6 p-0"
                                   title="Mark as read"
                                 >
@@ -378,7 +533,10 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => markAsRead(notification.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markAsRead(notification.id);
+                                  }}
                                   className="h-6 w-6 p-0"
                                   title="Mark as unread"
                                 >
@@ -388,7 +546,10 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => deleteNotification(notification.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteNotification(notification.id);
+                                }}
                                 className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
                                 title="Delete notification"
                               >
@@ -399,12 +560,22 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
                           <p className="text-sm text-muted-foreground mt-1">
                             {notification.message}
                           </p>
-                          {notification.requires_confirmation && !notification.confirmed_at && (
+                          {notification.signature ? (
+                            <Badge variant="outline" className="mt-2 text-xs bg-green-50 border-green-200 text-green-700">
+                              <Check className="w-3 h-3 mr-1" />
+                              Signed on {new Date(notification.confirmed_at || '').toLocaleDateString()}
+                            </Badge>
+                          ) : (notification.type === 'session_ended' || (!notification.type && notification.requires_confirmation)) && notification.requires_confirmation && !notification.confirmed_at ? (
+                            <Badge variant="outline" className="mt-2 text-xs bg-orange-50 border-orange-200 text-orange-700">
+                              <PenTool className="w-3 h-3 mr-1" />
+                              Signature Required
+                            </Badge>
+                          ) : notification.requires_confirmation && !notification.confirmed_at ? (
                             <Badge variant="outline" className="mt-2 text-xs">
                               <Clock className="w-3 h-3 mr-1" />
                               Action Required
                             </Badge>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -416,5 +587,20 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
         </Tabs>
       </CardContent>
     </Card>
+
+    {/* Notification Detail Modal */}
+    <NotificationDetailModal
+      notification={selectedNotification}
+      isOpen={isModalOpen}
+      onClose={() => {
+        setIsModalOpen(false);
+        setSelectedNotification(null);
+      }}
+      onSign={handleModalSign}
+      isSigning={isSigning}
+      sessionStatus="pending"
+      signingStatus={[]}
+    />
+    </>
   );
 };

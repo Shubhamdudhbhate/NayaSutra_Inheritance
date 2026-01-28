@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Briefcase, ArrowLeft } from "lucide-react";
+import { Briefcase, ArrowLeft, Bell } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 // Components
@@ -8,7 +8,6 @@ import { RegisterCaseForm } from "./RegisterCaseForm";
 import { SearchCase, CaseResult } from "./SearchCase"; 
 import { CaseManagementPanel } from "./CaseManagementPanel";
 import { NotificationTab } from "@/components/notifications/NotificationTab";
-import { UserNotifications } from "@/components/notifications/UserNotifications";
 
 
 export const ClerkDashboard = () => {
@@ -48,9 +47,14 @@ export const ClerkDashboard = () => {
             Register new cases and manage case proceedings
           </p>
         </div>
-        <div className="relative">
-          <UserNotifications />
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setActiveTab("notifications")}
+          className="relative text-slate-400 hover:text-white hover:bg-white/10 p-2"
+        >
+          <Bell className="w-5 h-5" />
+        </Button>
       </motion.div>
 
       <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setViewMode("list"); }} className="w-full">

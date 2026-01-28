@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { Calendar, Search } from "lucide-react";
+import { Calendar, Search, Bell } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { NyaySutraSidebar } from "@/components/dashboard/NyaySutraSidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { CaseCardWithActions } from "@/components/cases/CaseCardWithActions";
+import { useNavigate } from "react-router-dom";
 
 type Case = {
   id: string;
@@ -18,6 +20,7 @@ type Case = {
 
 export default function TodayCases() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [cases, setCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -72,12 +75,22 @@ export default function TodayCases() {
       <NyaySutraSidebar />
       <div className="flex-1 flex flex-col min-w-0 ml-64">
         <div className="border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-6">
-          <div className="flex items-center gap-3">
-            <Calendar className="w-6 h-6 text-primary" />
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Today's Cases</h1>
-              <p className="text-sm text-muted-foreground">Cases scheduled for hearing today</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Calendar className="w-6 h-6 text-primary" />
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">Today's Cases</h1>
+                <p className="text-sm text-muted-foreground">Cases scheduled for hearing today</p>
+              </div>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/lawyer/notifications")}
+              className="relative text-muted-foreground hover:text-foreground hover:bg-muted p-2"
+            >
+              <Bell className="w-5 h-5" />
+            </Button>
           </div>
         </div>
 

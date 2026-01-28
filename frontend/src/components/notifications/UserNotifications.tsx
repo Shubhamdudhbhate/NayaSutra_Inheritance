@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Bell, Check, X, Clock, AlertCircle } from "lucide-react";
+import { Bell, Check, X, Clock, AlertCircle, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWeb3 } from "@/contexts/Web3Context";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -17,6 +18,8 @@ interface Notification {
   confirmed_at?: string | null;
   confirmed_by?: string | null;
   requires_confirmation?: boolean;
+  type?: string;
+  metadata?: any;
 }
 
 interface UserNotificationsProps {
@@ -25,6 +28,7 @@ interface UserNotificationsProps {
 
 export const UserNotifications = ({ className }: UserNotificationsProps) => {
   const { profile } = useAuth();
+  const { connect, isConnected, isConnecting } = useWeb3();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -212,6 +216,55 @@ export const UserNotifications = ({ className }: UserNotificationsProps) => {
     }
   };
 
+  const handleConnectWallet = async () => {
+    try {
+      await connect();
+      toast.success("Wallet connected successfully!");
+    } catch (error) {
+      console.error("Wallet connection failed:", error);
+      toast.error("Failed to connect wallet");
+    }
+  };
+
+  const handleConfirmSession = async (notification: Notification) => {
+    if (!isConnected) {
+      toast.error("Please connect your wallet first");
+      return;
+    }
+
+    try {
+      // Mark notification as confirmed
+      const { error } = await supabase
+        .from("notifications")
+        .update({ 
+          confirmed_at: new Date().toISOString(),
+          confirmed_by: profile?.id,
+          is_read: true
+        })
+        .eq("id", notification.id);
+
+      if (error) {
+        console.error("Error confirming session:", error);
+        toast.error("Failed to confirm session");
+        return;
+      }
+
+      // Update local state
+      setNotifications(prev => 
+        prev.map(n => n.id === notification.id 
+          ? { ...n, confirmed_at: new Date().toISOString(), confirmed_by: profile?.id, is_read: true }
+          : n
+        )
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+
+      toast.success("Session confirmed successfully!");
+    } catch (error) {
+      console.error("Error confirming session:", error);
+      toast.error("Failed to confirm session");
+    }
+  };
+
   const getNotificationIcon = (notification: Notification) => {
     if (notification.requires_confirmation) {
       return <AlertCircle className="w-4 h-4 text-orange-500" />;
@@ -337,7 +390,37 @@ export const UserNotifications = ({ className }: UserNotificationsProps) => {
                           <p className="text-sm text-muted-foreground mt-1">
                             {notification.message}
                           </p>
-                          {notification.requires_confirmation && !notification.confirmed_at && (
+                          {notification.type === 'session_ended' && notification.requires_confirmation && !notification.confirmed_at && (
+                            <div className="mt-3 space-y-2">
+                              <Badge variant="outline" className="text-xs">
+                                <Clock className="w-3 h-3 mr-1" />
+                                Session Confirmation Required
+                              </Badge>
+                              <div className="flex gap-2 mt-2">
+                                {!isConnected ? (
+                                  <Button
+                                    size="sm"
+                                    onClick={handleConnectWallet}
+                                    disabled={isConnecting}
+                                    className="bg-orange-600 hover:bg-orange-700 text-white text-xs"
+                                  >
+                                    <Wallet className="w-3 h-3 mr-1" />
+                                    {isConnecting ? 'Connecting...' : 'Sign In with MetaMask'}
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleConfirmSession(notification)}
+                                    className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                                  >
+                                    <Check className="w-3 h-3 mr-1" />
+                                    Confirm Session
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {notification.requires_confirmation && !notification.confirmed_at && notification.type !== 'session_ended' && (
                             <Badge variant="outline" className="mt-2 text-xs">
                               <Clock className="w-3 h-3 mr-1" />
                               Action Required

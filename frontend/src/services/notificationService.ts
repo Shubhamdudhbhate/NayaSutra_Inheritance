@@ -50,7 +50,7 @@ export const getCaseParticipants = async (caseId: string): Promise<CaseParticipa
 
 /**
  * Create session end notifications for all participants (clerk + lawyers)
- * This is the SAFE version that doesn't require database schema changes yet
+ * This version saves to database for real notifications
  */
 export const createSessionEndNotifications = async (
   notificationData: SessionEndNotification
@@ -85,49 +85,51 @@ export const createSessionEndNotifications = async (
       totalRecipients: recipients.length
     });
 
-    // 3. For now, just show toast notifications (SAFE - no DB changes)
-    recipients.forEach((participantId, index) => {
-      setTimeout(() => {
-        toast.info(`📨 Notification Sent to Participant`, {
-          description: `Session end notification sent to participant ID: ${participantId} for case ${notificationData.caseNumber}`,
-          duration: 10000,
-          action: {
-            label: "View Details",
-            onClick: () => console.log(`This notification would appear on participant ${participantId}'s screen`)
-          }
+    // 3. Create notifications in database
+    const notificationPromises = recipients.map((recipientId) => {
+      if (!recipientId) return Promise.reject(new Error('Invalid recipient ID'));
+      
+      return supabase
+        .from('notifications')
+        .insert({
+          user_id: recipientId,
+          case_id: notificationData.caseId,
+          type: 'session_ended',
+          title: `Session Confirmation Required - ${notificationData.caseNumber}`,
+          message: `Court session for case ${notificationData.caseNumber} has ended. Please sign in with MetaMask to confirm and proceed.`,
+          requires_confirmation: true,
+          metadata: {
+            caseNumber: notificationData.caseNumber,
+            sessionId: notificationData.sessionId,
+            endedAt: notificationData.endedAt,
+            notes: notificationData.notes,
+            judgeId: notificationData.judgeId
+          },
+          priority: 'high',
+          is_read: false
         });
-      }, index * 1000); // Stagger notifications
     });
 
-    // 4. Show summary of who received notifications
-    setTimeout(() => {
+    // Execute all insertions
+    const results = await Promise.allSettled(notificationPromises);
+    
+    // Check for any failures
+    const failures = results.filter(result => result.status === 'rejected');
+    if (failures.length > 0) {
+      console.error('Some notifications failed to save:', failures);
+      toast.error(`Failed to send ${failures.length} notifications`);
+    }
+
+    // 4. Show success message
+    const successCount = results.filter(result => result.status === 'fulfilled').length;
+    if (successCount > 0) {
       toast.success(`✅ Notifications Sent`, {
-        description: `Session end notifications sent to ${recipients.length} participants for case ${notificationData.caseNumber}`,
+        description: `Session end notifications sent to ${successCount} participants for case ${notificationData.caseNumber}`,
         duration: 8000
       });
-    }, recipients.length * 1000 + 500);
+    }
 
-    // 4. Log what would be saved to database (for future implementation)
-    console.log('🗄️ Would save to database:', {
-      notifications: recipients.map(recipientId => ({
-        user_id: recipientId,
-        case_id: notificationData.caseId,
-        session_id: notificationData.sessionId,
-        type: 'session_ended',
-        title: `Session Confirmation Required - ${notificationData.caseNumber}`,
-        message: `Court session for case ${notificationData.caseNumber} has ended. Please confirm to proceed.`,
-        requires_confirmation: true,
-        metadata: {
-          caseNumber: notificationData.caseNumber,
-          endedAt: notificationData.endedAt,
-          notes: notificationData.notes,
-          judgeId: notificationData.judgeId
-        },
-        priority: 'high'
-      }))
-    });
-
-    return true;
+    return successCount > 0;
 
   } catch (error) {
     console.error('Error creating session end notifications:', error);
