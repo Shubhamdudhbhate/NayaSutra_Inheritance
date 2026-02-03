@@ -1,0 +1,13 @@
+version: "2"
+authtoken: 397kxr48lEtM11T97VOp2tCtyce_5rvRDFsGYFf4J13E8d6aD
+
+tunnels:
+  website_tunnel:
+    proto: http
+    addr: 5173
+    host_header: localhost:5173
+    hostname: uncommutable-chantell-horizontally.ngrok-free.dev
+
+  blockchain_tunnel:
+    proto: http
+    addr: 8545
