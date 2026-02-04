@@ -8,19 +8,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { GlassCard } from "@/components/layout/GlassWrapper";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+
 import { cn } from "@/lib/utils";
 
 // --- IMPORTS ---
 import { 
-  clerkCreateCase, 
-  clerkAssignJudge, 
-  clerkAssignLawyer 
+  clerkCreateCase,
+  getCaseDetails,
+  getCaseParticipants,
+  type CaseDetails,
+  type CaseParticipants
 } from "@/utils/BlockChain_Interface/clerk";
 import { getFIRByNumber } from "@/services/policeService"; 
 
@@ -123,8 +126,8 @@ export const RegisterCaseForm = () => {
           .select("id, full_name, role_category, wallet_address")
           .eq("role_category", "lawyer");
 
-        setJudges((judgesData as Profile[]) || []);
-        setLawyers((lawyersData as Profile[]) || []);
+        setJudges((judgesData as Profile[]));
+        setLawyers((lawyersData as Profile[]));
       } catch (error) {
         console.error("Error fetching personnel:", error);
       }
@@ -150,7 +153,7 @@ export const RegisterCaseForm = () => {
     if (!id) return null;
     const person = list.find((item) => item.id === id);
     // Fallback logic or error if wallet missing
-    return person?.wallet_address || null;
+    return person?.wallet_address;
   };
 
   const handleVerifyFir = async () => {
@@ -211,7 +214,7 @@ export const RegisterCaseForm = () => {
     
     try {
       // --- STEP 1: CREATE CASE ---
-      setLoadingStep("1/4: Creating Case on Blockchain...");
+      setLoadingStep("1/2: Creating Case on Blockchain...");
       
       const chainMetaData = JSON.stringify({
         desc: data.description || "",
@@ -221,26 +224,93 @@ export const RegisterCaseForm = () => {
       });
 
       const firIdForChain = verifiedFir ? verifiedFir.fir_number : "CIVIL-NA";
+      
+      // Generate a case ID that matches the local database format
+      const generatedCaseId = `CASE-${Date.now()}`;
 
       const { txHash, caseId } = await clerkCreateCase(
+        generatedCaseId,
         data.title, 
-        firIdForChain, 
+        firIdForChain,
+        prosecutionWallet,
+        defenceWallet,
+        judgeWallet,
         chainMetaData
       );
+
+      // --- STEP 2: VERIFY BLOCKCHAIN TRANSACTION ---
+      setLoadingStep("2/3: Verifying Blockchain Transaction...");
       
-      // --- STEP 2: ASSIGN JUDGE ---
-      setLoadingStep("2/4: Assigning Judge...");
-      await clerkAssignJudge(caseId, judgeWallet);
-
-      // --- STEP 3: ASSIGN PROSECUTION ---
-      setLoadingStep(`3/4: Assigning ${partyA} Lawyer...`);
-      await clerkAssignLawyer(caseId, prosecutionWallet, "prosecution");
-
-      // --- STEP 4: ASSIGN DEFENCE ---
-      setLoadingStep(`4/4: Assigning ${partyB} Lawyer...`);
-      await clerkAssignLawyer(caseId, defenceWallet, "defence");
-
-      // --- FINAL STEP: SAVE TO SUPABASE ---
+      // Wait a moment for blockchain to update
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Verify the case was actually created on blockchain
+      let caseDetails: CaseDetails | null = null;
+      let caseParticipants: CaseParticipants | null = null;
+      let verificationAttempts = 0;
+      const maxAttempts = 3;
+      
+      while (verificationAttempts < maxAttempts && (!caseDetails || !caseParticipants)) {
+        try {
+          console.log(`Verification attempt ${verificationAttempts + 1}/${maxAttempts}`);
+          
+          const [details, participants] = await Promise.all([
+            getCaseDetails(caseId),
+            getCaseParticipants(caseId)
+          ]);
+          
+          caseDetails = details;
+          caseParticipants = participants;
+          
+          // Validate that the data is not null/empty
+          if (!caseDetails.id || caseDetails.id === "") {
+            throw new Error("Case ID is empty on blockchain");
+          }
+          
+          if (!caseDetails.title || caseDetails.title === "") {
+            throw new Error("Case title is empty on blockchain");
+          }
+          
+          if (!caseParticipants.judge || caseParticipants.judge === "0x0000000000000000000000000000000000000000") {
+            throw new Error("Judge assignment failed on blockchain");
+          }
+          
+          if (!caseParticipants.prosecution || caseParticipants.prosecution === "0x0000000000000000000000000000000000000000") {
+            throw new Error("Prosecution lawyer assignment failed on blockchain");
+          }
+          
+          if (!caseParticipants.defence || caseParticipants.defence === "0x0000000000000000000000000000000000000000") {
+            throw new Error("Defence lawyer assignment failed on blockchain");
+          }
+          
+          console.log("✅ Blockchain verification successful:", {
+            caseId: caseDetails.id,
+            title: caseDetails.title,
+            judge: caseParticipants.judge,
+            prosecution: caseParticipants.prosecution,
+            defence: caseParticipants.defence
+          });
+          
+          break; // Success, exit loop
+          
+        } catch (verificationError: any) {
+          console.error(`Verification attempt ${verificationAttempts + 1} failed:`, verificationError);
+          verificationAttempts++;
+          
+          if (verificationAttempts < maxAttempts) {
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } else {
+            throw new Error(`Blockchain verification failed after ${maxAttempts} attempts: ${verificationError.message}`);
+          }
+        }
+      }
+      
+      if (!caseDetails || !caseParticipants) {
+        throw new Error("Failed to verify case creation on blockchain. The transaction may have succeeded but data is not accessible.");
+      }
+      
+      // --- STEP 2: SAVE TO SUPABASE ---
       setLoadingStep("Finalizing Database Record...");
 
       const descriptionWithFir = verifiedFir 
@@ -287,8 +357,32 @@ export const RegisterCaseForm = () => {
         toast.error("Insufficient funds for gas fees. Please ensure you have enough ETH in your wallet.");
       } else if (error.message?.includes("network")) {
         toast.error("Network error. Please check your internet connection and try again.");
-      } else if (error.message?.includes("contract")) {
-        toast.error("Smart contract error. Please contact support.");
+      } else if (error.message?.includes("Invalid") && error.message?.includes("address format")) {
+        toast.error("Invalid wallet address format. Please check the wallet addresses in user profiles.");
+      } else if (error.message?.includes("Case ID is empty on blockchain")) {
+        toast.error("Case creation failed on blockchain. The case ID was not properly stored. Please try again.");
+      } else if (error.message?.includes("Case title is empty on blockchain")) {
+        toast.error("Case creation failed on blockchain. The case title was not properly stored. Please try again.");
+      } else if (error.message?.includes("Judge assignment failed on blockchain")) {
+        toast.error("Judge assignment failed on blockchain. The selected judge may not have the proper role or the assignment was not processed. Please verify the judge's role and try again.");
+      } else if (error.message?.includes("Prosecution lawyer assignment failed on blockchain")) {
+        toast.error("Prosecution lawyer assignment failed on blockchain. The selected lawyer may not have the proper role or the assignment was not processed. Please verify the lawyer's role and try again.");
+      } else if (error.message?.includes("Defence lawyer assignment failed on blockchain")) {
+        toast.error("Defence lawyer assignment failed on blockchain. The selected lawyer may not have the proper role or the assignment was not processed. Please verify the lawyer's role and try again.");
+      } else if (error.message?.includes("Blockchain verification failed")) {
+        toast.error("Blockchain verification failed. The transaction may have succeeded but the data is not accessible. Please check the transaction and try again.");
+      } else if (error.message?.includes("Prosecution must be a lawyer")) {
+        toast.error("Prosecution lawyer must have a lawyer role in the system. Please select a valid lawyer.");
+      } else if (error.message?.includes("Defence must be a lawyer")) {
+        toast.error("Defence lawyer must have a lawyer role in the system. Please select a valid lawyer.");
+      } else if (error.message?.includes("Judge must be a judge")) {
+        toast.error("Selected person must have a judge role in the system. Please select a valid judge.");
+      } else if (error.message?.includes("User is not a Lawyer")) {
+        toast.error("Selected person is not registered as a lawyer in the system.");
+      } else if (error.message?.includes("User is not a Judge")) {
+        toast.error("Selected person is not registered as a judge in the system.");
+      } else if (error.message?.includes("Invalid role")) {
+        toast.error("Invalid role assignment. Please check the role configuration.");
       } else {
         toast.error(error.message || "Failed to register case. Please try again.");
       }

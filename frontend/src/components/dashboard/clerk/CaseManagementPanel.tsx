@@ -19,8 +19,8 @@ import { toast } from "sonner";
 import { DocumentUploadSection } from "./DocumentUploadSection";
 import { SignatureSection } from "./SignatureSection";
 import { 
-  clerkAssignJudge, 
-  clerkAssignLawyer, 
+  clerkReassignJudge, 
+  clerkReassignLawyer, 
   getCaseDetails, 
   getCaseParticipants,
   type CaseDetails,
@@ -177,10 +177,10 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
         const judgeProfile = judges.find(j => j.id === selectedJudge);
         
         if (judgeProfile?.wallet_address) {
-          await clerkAssignJudge(caseData.on_chain_case_id, judgeProfile.wallet_address);
-          toast.success("Judge assigned on Blockchain!");
+          await clerkReassignJudge(caseData.on_chain_case_id, judgeProfile.wallet_address);
+          toast.success("Judge reassigned on Blockchain!");
         } else {
-          toast.error("Selected Judge has no wallet address. Cannot assign on-chain.");
+          toast.error("Selected Judge has no wallet address. Cannot reassign on-chain.");
           return; // Stop if blockchain update is impossible
         }
       }
@@ -196,10 +196,35 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
       toast.success("Judge updated in Database!");
       setJudgeDocUploaded(false);
       onCaseUpdate?.(); // Refresh parent
-      
     } catch (error: any) {
       console.error(error);
-      toast.error(error.message || "Failed to reassign judge");
+      
+      // More specific error handling
+      if (error.code === "ACTION_REJECTED" || error.message?.includes("user rejected") || error.message?.includes("rejected transaction")) {
+        toast.error("Transaction rejected by user. Please approve the transaction in your wallet.");
+      } else if (error.message?.includes("insufficient funds")) {
+        toast.error("Insufficient funds for gas fees. Please ensure you have enough ETH in your wallet.");
+      } else if (error.message?.includes("network")) {
+        toast.error("Network error. Please check your internet connection and try again.");
+      } else if (error.message?.includes("Invalid") && error.message?.includes("address format")) {
+        toast.error("Invalid wallet address format. Please check the wallet addresses in user profiles.");
+      } else if (error.message?.includes("Prosecution must be a lawyer")) {
+        toast.error("Prosecution lawyer must have a lawyer role in the system. Please select a valid lawyer.");
+      } else if (error.message?.includes("Defence must be a lawyer")) {
+        toast.error("Defence lawyer must have a lawyer role in the system. Please select a valid lawyer.");
+      } else if (error.message?.includes("Judge must be a judge")) {
+        toast.error("Selected person must have a judge role in the system. Please select a valid judge.");
+      } else if (error.message?.includes("User is not a Lawyer")) {
+        toast.error("Selected person is not registered as a lawyer in the system.");
+      } else if (error.message?.includes("User is not a Judge")) {
+        toast.error("Selected person is not registered as a judge in the system.");
+      } else if (error.message?.includes("Invalid role")) {
+        toast.error("Invalid role assignment. Please check the role configuration.");
+      } else if (error.message?.includes("contract")) {
+        toast.error("Smart contract error. Please contact support.");
+      } else {
+        toast.error(error.message || "Failed to reassign judge");
+      }
     } finally {
       setIsAssigningJudge(false);
     }
@@ -217,8 +242,8 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
         
         if (lawyerProfile?.wallet_address) {
           // Role "prosecution" for Party A
-          await clerkAssignLawyer(caseData.on_chain_case_id, lawyerProfile.wallet_address, "prosecution");
-          toast.success("Lawyer A assigned on Blockchain!");
+          await clerkReassignLawyer(caseData.on_chain_case_id, lawyerProfile.wallet_address, "prosecution");
+          toast.success("Lawyer A reassigned on Blockchain!");
         } else {
           toast.error("Selected Lawyer has no wallet address.");
           return;
@@ -238,7 +263,21 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
       
     } catch (error: any) {
       console.error(error);
-      toast.error(error.message || "Failed to assign Lawyer A");
+      
+      // More specific error handling
+      if (error.code === "ACTION_REJECTED" || error.message?.includes("user rejected") || error.message?.includes("rejected transaction")) {
+        toast.error("Transaction rejected by user. Please approve the transaction in your wallet.");
+      } else if (error.message?.includes("insufficient funds")) {
+        toast.error("Insufficient funds for gas fees. Please ensure you have enough ETH in your wallet.");
+      } else if (error.message?.includes("network")) {
+        toast.error("Network error. Please check your internet connection and try again.");
+      } else if (error.message?.includes("Invalid") && error.message?.includes("address format")) {
+        toast.error("Invalid wallet address format. Please check the wallet addresses in user profiles.");
+      } else if (error.message?.includes("contract")) {
+        toast.error("Smart contract error. Please contact support.");
+      } else {
+        toast.error(error.message || "Failed to reassign Lawyer A");
+      }
     } finally {
       setIsAssigningLawyerA(false);
     }
@@ -256,8 +295,8 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
         
         if (lawyerProfile?.wallet_address) {
           // Role "defence" for Party B
-          await clerkAssignLawyer(caseData.on_chain_case_id, lawyerProfile.wallet_address, "defence");
-          toast.success("Lawyer B assigned on Blockchain!");
+          await clerkReassignLawyer(caseData.on_chain_case_id, lawyerProfile.wallet_address, "defence");
+          toast.success("Lawyer B reassigned on Blockchain!");
         } else {
           toast.error("Selected Lawyer has no wallet address.");
           return;
@@ -277,7 +316,21 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
       
     } catch (error: any) {
       console.error(error);
-      toast.error(error.message || "Failed to assign Lawyer B");
+      
+      // More specific error handling
+      if (error.code === "ACTION_REJECTED" || error.message?.includes("user rejected") || error.message?.includes("rejected transaction")) {
+        toast.error("Transaction rejected by user. Please approve the transaction in your wallet.");
+      } else if (error.message?.includes("insufficient funds")) {
+        toast.error("Insufficient funds for gas fees. Please ensure you have enough ETH in your wallet.");
+      } else if (error.message?.includes("network")) {
+        toast.error("Network error. Please check your internet connection and try again.");
+      } else if (error.message?.includes("Invalid") && error.message?.includes("address format")) {
+        toast.error("Invalid wallet address format. Please check the wallet addresses in user profiles.");
+      } else if (error.message?.includes("contract")) {
+        toast.error("Smart contract error. Please contact support.");
+      } else {
+        toast.error(error.message || "Failed to reassign Lawyer B");
+      }
     } finally {
       setIsAssigningLawyerB(false);
     }
@@ -329,6 +382,24 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
             <p className="text-slate-400 font-mono mt-1">
               {caseData.case_number}
             </p>
+            {/* Database Assignment Status */}
+            <div className="flex gap-2 mt-2">
+              {caseData.assigned_judge_id && (
+                <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 border text-xs">
+                  <Gavel className="w-3 h-3 mr-1" /> Judge Assigned
+                </Badge>
+              )}
+              {caseData.lawyer_party_a_id && (
+                <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 border text-xs">
+                  <User className="w-3 h-3 mr-1" /> Lawyer A Assigned
+                </Badge>
+              )}
+              {caseData.lawyer_party_b_id && (
+                <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 border text-xs">
+                  <User className="w-3 h-3 mr-1" /> Lawyer B Assigned
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
         <Badge variant="outline" className="capitalize bg-white/5 border-white/10 text-slate-300">
@@ -380,9 +451,12 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
                       <p className="text-xs text-slate-500 mb-1">Judge Address</p>
                       <p className="text-xs font-mono text-white truncate" title={blockchainParticipants.judge}>
                         {blockchainParticipants.judge === "0x0000000000000000000000000000000000000000" 
-                            ? "Not Assigned" 
+                            ? (caseData.assigned_judge_id ? "Assigned in DB (Not Synced)" : "Not Assigned") 
                             : blockchainParticipants.judge}
                       </p>
+                      {caseData.assigned_judge_id && blockchainParticipants.judge === "0x0000000000000000000000000000000000000000" && (
+                        <p className="text-xs text-amber-400 mt-1">⚠️ Database assignment not synced to blockchain</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-slate-500 mb-1">Clerk Address</p>
@@ -394,17 +468,23 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
                       <p className="text-xs text-slate-500 mb-1">Prosecution</p>
                       <p className="text-xs font-mono text-white truncate" title={blockchainParticipants.prosecution}>
                          {blockchainParticipants.prosecution === "0x0000000000000000000000000000000000000000" 
-                            ? "Not Assigned" 
+                            ? (caseData.lawyer_party_a_id ? "Assigned in DB (Not Synced)" : "Not Assigned") 
                             : blockchainParticipants.prosecution}
                       </p>
+                      {caseData.lawyer_party_a_id && blockchainParticipants.prosecution === "0x0000000000000000000000000000000000000000" && (
+                        <p className="text-xs text-amber-400 mt-1">⚠️ Database assignment not synced to blockchain</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-slate-500 mb-1">Defence</p>
                       <p className="text-xs font-mono text-white truncate" title={blockchainParticipants.defence}>
                          {blockchainParticipants.defence === "0x0000000000000000000000000000000000000000" 
-                            ? "Not Assigned" 
+                            ? (caseData.lawyer_party_b_id ? "Assigned in DB (Not Synced)" : "Not Assigned") 
                             : blockchainParticipants.defence}
                       </p>
+                      {caseData.lawyer_party_b_id && blockchainParticipants.defence === "0x0000000000000000000000000000000000000000" && (
+                        <p className="text-xs text-amber-400 mt-1">⚠️ Database assignment not synced to blockchain</p>
+                      )}
                     </div>
                   </div>
                 )}
