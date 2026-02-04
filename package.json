@@ -16,7 +16,8 @@
     "build:all": "npm run build -w shared && npm run build -w frontend && npm run build -w backend",
     "lint": "npm run lint -w frontend",
     "type-check": "npm run type-check -w frontend && npm run type-check -w shared",
-    "preview": "npm -w frontend run preview"
+    "preview": "npm -w frontend run preview",
+    "assign-roles": "npx tsx scripts/assign-roles.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -90,6 +91,7 @@
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.21",
+    "dotenv": "^16.4.5",
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
@@ -97,6 +99,7 @@
     "globals": "^15.15.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19"

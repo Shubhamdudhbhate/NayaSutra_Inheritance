@@ -1,48 +1,61 @@
-import { z } from "zod";
+// Shared Zod schemas for validation
+import { z } from 'zod';
+
+export const UserSchema = z.object({
+  id: z.string(),
+  email: z.string().email(),
+  name: z.string().min(1),
+  role: z.enum(['user', 'lawyer', 'judge', 'admin']),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export const CaseSchema = z.object({
-  id: z.string().uuid().optional(),
-  caseNumber: z.string().min(1),
+  id: z.string(),
   title: z.string().min(1),
-  description: z.string().optional(),
-  status: z.enum(["pending", "active", "hearing", "verdict_pending", "closed", "appealed"]),
-  category: z.string(),
-  createdBy: z.string(),
-  createdAt: z.string().datetime().optional(),
-  updatedAt: z.string().datetime().optional(),
-  court: z.string().optional(),
-  judge: z.string().optional(),
+  description: z.string().min(1),
+  status: z.enum(['pending', 'active', 'resolved', 'closed']),
+  plaintiffId: z.string(),
+  defendantId: z.string().optional(),
+  lawyerId: z.string().optional(),
+  judgeId: z.string().optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
 
 export const EvidenceSchema = z.object({
-  id: z.string().uuid().optional(),
-  caseId: z.string().uuid(),
-  fileName: z.string(),
-  fileType: z.string(),
-  fileSize: z.number().positive(),
+  id: z.string(),
+  caseId: z.string(),
+  title: z.string().min(1),
+  description: z.string(),
   fileUrl: z.string().url().optional(),
-  thumbnailUrl: z.string().url().optional(),
-  type: z.enum(["forensic", "cctv", "witness", "document", "audio", "other"]),
-  status: z.enum(["draft", "pending", "signed", "immutable"]),
-  uploadedBy: z.string().uuid(),
-  uploadedAt: z.string().datetime(),
-  hash: z.string().optional(),
-  signedBy: z.string().uuid().optional(),
-  signedAt: z.string().datetime().optional(),
-  signature: z.string().optional(),
+  fileType: z.string().optional(),
+  uploadedBy: z.string(),
+  isVerified: z.boolean(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
 
-export const ProfileSchema = z.object({
-  id: z.string().uuid(),
-  email: z.string().email(),
-  name: z.string().min(1),
-  role: z.enum(["judiciary", "legal_practitioner", "public_party"]),
-  department: z.string().optional(),
-  avatar: z.string().url().optional(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+export const HearingSchema = z.object({
+  id: z.string(),
+  caseId: z.string(),
+  scheduledDate: z.date(),
+  status: z.enum(['scheduled', 'in_progress', 'completed', 'cancelled']),
+  notes: z.string().optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
 
-export type CaseInput = z.infer<typeof CaseSchema>;
-export type EvidenceInput = z.infer<typeof EvidenceSchema>;
-export type ProfileInput = z.infer<typeof ProfileSchema>;
+export const ApiResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.any().optional(),
+  error: z.string().optional(),
+  message: z.string().optional(),
+});
+
+// Type inference from schemas
+export type User = z.infer<typeof UserSchema>;
+export type Case = z.infer<typeof CaseSchema>;
+export type Evidence = z.infer<typeof EvidenceSchema>;
+export type Hearing = z.infer<typeof HearingSchema>;
+export type ApiResponse = z.infer<typeof ApiResponseSchema>;

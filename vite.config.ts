@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => ({
     host: "127.0.0.1",
     port: parseInt(process.env.PORT || "5173"),
     middlewareMode: false,
-    preTransformRequests: [],
+    allowedHosts: true,
     hmr: {
       host: "localhost",
       port: 5173,
