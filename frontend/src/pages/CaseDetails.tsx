@@ -144,11 +144,6 @@ const CaseDetails = () => {
       return;
     }
 
-    if (!caseData?.id) {
-      toast.error('Case ID not found');
-      return;
-    }
-
     setIsClosingSession(true);
     try {
       const now = new Date().toISOString();
@@ -164,16 +159,6 @@ const CaseDetails = () => {
 
       if (sessionError) throw sessionError;
 
-      const { error: caseError } = await supabase
-        .from('cases')
-        .update({
-          status: 'closed',
-          updated_at: now,
-        })
-        .eq('id', caseData.id);
-
-      if (caseError) throw caseError;
-
       toast.success('Session closed successfully');
       setSessionEnded(false);
       await courtSession.refreshSession();
@@ -187,31 +172,11 @@ const CaseDetails = () => {
   };
 
   const [isSchedulingSession, setIsSchedulingSession] = useState(false);
-  const [isEndingSession, setIsEndingSession] = useState(false);
+  const [isEndingCase, setIsEndingCase] = useState(false);
 
   const handleScheduleSessionFromModal = async () => {
-    if (!selectedNotification) return;
-
-    const sessionId = selectedNotification.metadata?.sessionId;
-    if (!sessionId) {
-      toast.error('Session ID not found');
-      return;
-    }
-
     setIsSchedulingSession(true);
     try {
-      const now = new Date().toISOString();
-
-      const { error } = await supabase
-        .from('session_logs')
-        .update({
-          status: 'ended',
-          updated_at: now,
-        })
-        .eq('id', sessionId);
-
-      if (error) throw error;
-
       setScheduleDialogOpen(true);
     } catch (error) {
       console.error('Error preparing session scheduling:', error);
@@ -221,36 +186,33 @@ const CaseDetails = () => {
     }
   };
 
-  const handleEndSessionFromModal = async () => {
-    if (!selectedNotification) return;
-
-    const sessionId = selectedNotification.metadata?.sessionId;
-    if (!sessionId) {
-      toast.error('Session ID not found');
+  const handleEndCaseFromModal = async () => {
+    if (!caseData?.id) {
+      toast.error('Case ID not found');
       return;
     }
 
-    setIsEndingSession(true);
+    setIsEndingCase(true);
     try {
       const now = new Date().toISOString();
+
       const { error } = await supabase
-        .from('session_logs')
+        .from('cases')
         .update({
-          status: 'ended',
-          ended_at: now,
+          status: 'closed',
           updated_at: now,
         })
-        .eq('id', sessionId);
+        .eq('id', caseData.id);
 
       if (error) throw error;
 
-      toast.success('Session ended');
-      await courtSession.refreshSession();
+      toast.success('Case ended');
+      setCaseData(prev => (prev ? { ...prev, status: 'closed', updated_at: now } : prev));
     } catch (error) {
-      console.error('Error ending session from modal:', error);
-      toast.error('Failed to end session');
+      console.error('Error ending case from modal:', error);
+      toast.error('Failed to end case');
     } finally {
-      setIsEndingSession(false);
+      setIsEndingCase(false);
     }
   };
 
@@ -933,7 +895,7 @@ const CaseDetails = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {isJudge && !courtSession.isSessionActive && !sessionEnded && (
+          {isJudge && caseData.status !== 'closed' && !courtSession.isSessionActive && !sessionEnded && (
             <>
               <Button
                 onClick={handleStartSession}
@@ -944,7 +906,7 @@ const CaseDetails = () => {
               </Button>
             </>
           )}
-          {isJudge && sessionEnded && !courtSession.isSessionActive && (
+          {isJudge && caseData.status !== 'closed' && sessionEnded && !courtSession.isSessionActive && (
             <>
               <Button
                 onClick={handleSignStatusClick}
@@ -955,7 +917,7 @@ const CaseDetails = () => {
               </Button>
             </>
           )}
-          {isJudge && courtSession.isSessionActive && !sessionEnded && (
+          {isJudge && caseData.status !== 'closed' && courtSession.isSessionActive && !sessionEnded && (
             <>
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -1647,11 +1609,11 @@ const CaseDetails = () => {
         onSign={handleJudgeSign}
         onCloseSession={handleCloseSession}
         onScheduleSession={async () => handleScheduleSessionFromModal()}
-        onEndSession={async () => handleEndSessionFromModal()}
+        onEndCase={async () => handleEndCaseFromModal()}
         isSigning={isSigning}
         isClosingSession={isClosingSession}
         isSchedulingSession={isSchedulingSession}
-        isEndingSession={isEndingSession}
+        isEndingCase={isEndingCase}
         sessionStatus={(caseData?.status as any) || 'pending'}
         signingStatus={signingStatus}
         isJudge={isJudge}

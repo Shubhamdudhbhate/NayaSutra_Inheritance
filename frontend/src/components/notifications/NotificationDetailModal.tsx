@@ -27,12 +27,12 @@ interface NotificationDetailModalProps {
   onSign: (notification: Notification) => Promise<void>;
   onCloseSession?: (notification: Notification) => Promise<void>;
   onScheduleSession?: (notification: Notification) => Promise<void>;
-  onEndSession?: (notification: Notification) => Promise<void>;
+  onEndCase?: (notification: Notification) => Promise<void>;
   isSigning: boolean;
   isClosingSession?: boolean;
   isSchedulingSession?: boolean;
-  isEndingSession?: boolean;
-  sessionStatus?: 'pending' | 'in_progress' | 'final_submission';
+  isEndingCase?: boolean;
+  sessionStatus?: 'pending' | 'in_progress' | 'final_submission' | 'closed';
   signingStatus?: Array<{
     userId: string;
     userName: string;
@@ -51,11 +51,11 @@ export const NotificationDetailModal = ({
   onSign, 
   onCloseSession,
   onScheduleSession,
-  onEndSession,
+  onEndCase,
   isSigning,
   isClosingSession = false,
   isSchedulingSession = false,
-  isEndingSession = false,
+  isEndingCase = false,
   sessionStatus = 'pending',
   signingStatus = [],
   isJudge = false,
@@ -66,11 +66,12 @@ export const NotificationDetailModal = ({
   if (!notification || !isOpen) return null;
 
   const hasSigned = notification.is_read;
-  const showSignButton = !notification.is_read || notification.type === 'session_ended';
-  const allFourSigned = isJudge && allPartiesSigned && hasSigned;
+  const isCaseClosed = sessionStatus === 'closed';
+  const showSignButton = !isCaseClosed && (!notification.is_read || notification.type === 'session_ended');
+  const allFourSigned = !isCaseClosed && isJudge && allPartiesSigned && hasSigned;
   const showCloseSessionButton = allFourSigned && !!onCloseSession;
   const showScheduleSessionButton = allFourSigned && !!onScheduleSession;
-  const showEndSessionButton = allFourSigned && !!onEndSession;
+  const showEndCaseButton = allFourSigned && !!onEndCase;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -356,13 +357,13 @@ export const NotificationDetailModal = ({
                 </Button>
               )}
 
-              {showEndSessionButton && (
+              {showEndCaseButton && (
                 <Button
-                  onClick={() => onEndSession?.(notification)}
-                  disabled={isEndingSession}
+                  onClick={() => onEndCase?.(notification)}
+                  disabled={isEndingCase}
                   className="font-semibold px-6 py-2 shadow-lg bg-red-600 hover:bg-red-700 text-white"
                 >
-                  {isEndingSession ? (
+                  {isEndingCase ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                       Ending...
@@ -370,7 +371,7 @@ export const NotificationDetailModal = ({
                   ) : (
                     <>
                       <AlertCircle className="w-4 h-4 mr-2" />
-                      End Session
+                      End Case
                     </>
                   )}
                 </Button>
@@ -399,7 +400,7 @@ export const NotificationDetailModal = ({
               {showSignButton && !hasSigned && (
                 <Button 
                   onClick={() => onSign(notification)}
-                  disabled={isSigning || !isConnected || (isJudge && !allPartiesSigned)}
+                  disabled={isCaseClosed || isSigning || !isConnected || (isJudge && !allPartiesSigned)}
                   className={`font-semibold px-6 py-2 shadow-lg ${
                     isJudge && !allPartiesSigned 
                       ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
