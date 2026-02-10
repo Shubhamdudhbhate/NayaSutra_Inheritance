@@ -3,7 +3,6 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   AudioLines,
-  Calendar,
   CheckCircle2,
   Clock,
   File,
@@ -33,6 +32,7 @@ import {
   AlignRight,
   Printer,
   Download,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +54,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { createSessionEndNotifications } from "@/services/notificationServiceDatabase";
 import { NotificationDetailModal } from "@/components/notifications/NotificationDetailModal";
+import { useWeb3 } from "@/contexts/Web3Context";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { ScheduleHearingDialog } from "@/components/ScheduleHearingDialog";
@@ -69,6 +70,7 @@ type DbCase = {
   party_a_name: string;
   party_b_name: string;
   court_name: string | null;
+  clerk_id?: string | null;
   assigned_judge_id: string | null;
   lawyer_party_a_id: string | null;
   lawyer_party_b_id: string | null;
@@ -83,6 +85,7 @@ const CaseDetails = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { profile } = useAuth();
+  const { isConnected, connect, signMessage } = useWeb3();
 
   // Court session management
   const courtSession = useCourtSession(id || "");
@@ -105,6 +108,114 @@ const CaseDetails = () => {
   const [hasNotesChanges, setHasNotesChanges] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
 
+  const handleSaveNotes = async () => {
+    if (!sessionNotes.trim()) {
+      setHasNotesChanges(false);
+      return;
+    }
+
+    setIsSavingNotes(true);
+    try {
+      const success = await courtSession.updateNotes(sessionNotes);
+      if (success) {
+        setLastSavedNotes(new Date());
+        setHasNotesChanges(false);
+        // Only show toast for manual saves
+        if (!isSavingNotes) {
+          toast.success("Session notes saved");
+        }
+      }
+    } catch (error) {
+      console.error("Error saving notes:", error);
+      if (!isSavingNotes) {
+        toast.error("Failed to save notes");
+      }
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
+
+  const handleCloseSession = async () => {
+    if (!profile || !selectedNotification) return;
+
+    const sessionId = selectedNotification.metadata?.sessionId;
+    if (!sessionId) {
+      toast.error('Session ID not found');
+      return;
+    }
+
+    setIsClosingSession(true);
+    try {
+      const now = new Date().toISOString();
+
+      const { error: sessionError } = await supabase
+        .from('session_logs')
+        .update({
+          status: 'ended',
+          ended_at: now,
+          updated_at: now,
+        })
+        .eq('id', sessionId);
+
+      if (sessionError) throw sessionError;
+
+      toast.success('Session closed successfully');
+      setSessionEnded(false);
+      await courtSession.refreshSession();
+      setShowJudgeModal(false);
+    } catch (error) {
+      console.error('Error closing session:', error);
+      toast.error('Failed to close session');
+    } finally {
+      setIsClosingSession(false);
+    }
+  };
+
+  const [isSchedulingSession, setIsSchedulingSession] = useState(false);
+  const [isEndingCase, setIsEndingCase] = useState(false);
+
+  const handleScheduleSessionFromModal = async () => {
+    setIsSchedulingSession(true);
+    try {
+      setScheduleDialogOpen(true);
+    } catch (error) {
+      console.error('Error preparing session scheduling:', error);
+      toast.error('Failed to prepare scheduling');
+    } finally {
+      setIsSchedulingSession(false);
+    }
+  };
+
+  const handleEndCaseFromModal = async () => {
+    if (!caseData?.id) {
+      toast.error('Case ID not found');
+      return;
+    }
+
+    setIsEndingCase(true);
+    try {
+      const now = new Date().toISOString();
+
+      const { error } = await supabase
+        .from('cases')
+        .update({
+          status: 'closed',
+          updated_at: now,
+        })
+        .eq('id', caseData.id);
+
+      if (error) throw error;
+
+      toast.success('Case ended');
+      setCaseData(prev => (prev ? { ...prev, status: 'closed', updated_at: now } : prev));
+    } catch (error) {
+      console.error('Error ending case from modal:', error);
+      toast.error('Failed to end case');
+    } finally {
+      setIsEndingCase(false);
+    }
+  };
+
   // Judge modal state
   const [showJudgeModal, setShowJudgeModal] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<{
@@ -122,18 +233,49 @@ const CaseDetails = () => {
     signature?: string | null;
   } | null>(null);
   const [isSigning, setIsSigning] = useState(false);
+  const [isClosingSession, setIsClosingSession] = useState(false);
   const [signingStatus, setSigningStatus] = useState<any[]>([]);
   const [allPartiesSigned, setAllPartiesSigned] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false); // Track if session has ended
 
-  // Real-time listener for signature updates
+  const refreshSigningStatus = async (sessionId: string) => {
+    if (!caseData) return;
+
+    const { data: participants, error } = await supabase
+      .from('notifications')
+      .select('user_id, signature, confirmed_at')
+      .eq('session_id', sessionId);
+
+    if (error) {
+      console.error('Error refreshing signing status:', error);
+      return;
+    }
+
+    const updatedStatus = [
+      { userId: caseData.clerk_id, userName: "Clerk", role: "Clerk" },
+      { userId: caseData.lawyer_party_a_id, userName: lawyerAName || "Lawyer A", role: "Lawyer (Plaintiff)" },
+      { userId: caseData.lawyer_party_b_id, userName: lawyerBName || "Lawyer B", role: "Lawyer (Defendant)" },
+    ]
+      .filter(p => p.userId)
+      .map(participant => {
+        const record = participants?.find(p => p.user_id === participant.userId);
+        return {
+          ...participant,
+          signed: !!record?.signature,
+          signedAt: record?.confirmed_at,
+        };
+      });
+
+    setSigningStatus(updatedStatus);
+    setAllPartiesSigned(updatedStatus.every(s => s.signed));
+  };
+
+  // Realtime: whenever any notification for this session updates, refresh full signing list from DB
   useEffect(() => {
-    if (!showJudgeModal || !selectedNotification) return;
-
-    const sessionId = selectedNotification.metadata?.sessionId;
+    const sessionId = selectedNotification?.metadata?.sessionId;
     if (!sessionId) return;
 
-    // Subscribe to real-time signature updates
-    const subscription = supabase
+    const channel = supabase
       .channel(`session-signatures-${sessionId}`)
       .on(
         'postgres_changes',
@@ -141,41 +283,95 @@ const CaseDetails = () => {
           event: 'UPDATE',
           schema: 'public',
           table: 'notifications',
-          filter: `metadata->>sessionId=eq.${sessionId}`
+          filter: `session_id=eq.${sessionId}`
         },
-        (payload) => {
-          console.log('🔄 Real-time signature update:', payload);
-          
-          const updatedNotification = payload.new as any;
-          const userId = updatedNotification.user_id;
-          
-          // Update signing status
-          setSigningStatus(prev => 
-            prev.map(signer => 
-              signer.userId === userId 
-                ? { 
-                    ...signer, 
-                    signed: !!updatedNotification.signature, 
-                    signedAt: updatedNotification.confirmed_at 
-                  }
-                : signer
-            )
-          );
-
-          // Check if all parties have signed
-          setSigningStatus(current => {
-            const allSigned = current.every(signer => signer.signed);
-            setAllPartiesSigned(allSigned);
-            return current;
-          });
+        () => {
+          refreshSigningStatus(sessionId);
         }
       )
       .subscribe();
 
     return () => {
-      subscription.unsubscribe();
+      supabase.removeChannel(channel);
     };
-  }, [showJudgeModal, selectedNotification]);
+  }, [selectedNotification?.metadata?.sessionId, caseData, lawyerAName, lawyerBName]);
+
+  // Check for existing ended session on component mount
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      if (!caseData || !profile) return;
+      
+      try {
+        // 1. First check for paused sessions in session_logs
+        const { data: pausedSessions } = await supabase
+          .from('session_logs')
+          .select('*')
+          .eq('case_id', caseData.id)
+          .eq('status', 'paused')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (pausedSessions && pausedSessions.length > 0) {
+          const pausedSession = pausedSessions[0];
+          console.log('📋 Found paused session:', pausedSession.id);
+          
+          // 2. Check for notifications related to this paused session
+          const { data: notifications } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('case_id', caseData.id)
+            .eq('session_id', pausedSession.id)
+            .eq('user_id', profile.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (notifications && notifications.length > 0) {
+            const notification = notifications[0];
+            
+            // Set session as ended and create judge notification object
+            setSessionEnded(true);
+            
+            const judgeNotification = {
+              id: notification.id,
+              title: notification.title,
+              message: notification.message,
+              type: (notification as any).type || 'session_ended',
+              is_read: notification.is_read ?? false,
+              created_at: notification.created_at || new Date().toISOString(),
+              confirmed_at: notification.confirmed_at,
+              confirmed_by: notification.confirmed_by,
+              requires_confirmation: (notification as any).requires_confirmation ?? undefined,
+              user_id: notification.user_id,
+              metadata: {
+                ...(((notification.metadata && typeof notification.metadata === 'object') ? notification.metadata : {}) as any),
+                caseId: (notification.metadata as any)?.caseId || notification.case_id || caseData.id,
+                sessionId: (notification.metadata as any)?.sessionId || notification.session_id || pausedSession.id,
+              },
+              signature: notification.signature
+            };
+
+            // Initialize signing status (clerk + 2 lawyers)
+            const initialSigningStatus = [
+              { userId: caseData.clerk_id, userName: "Clerk", role: "Clerk", signed: false },
+              { userId: caseData.lawyer_party_a_id, userName: lawyerAName || "Lawyer A", role: "Lawyer (Plaintiff)", signed: false },
+              { userId: caseData.lawyer_party_b_id, userName: lawyerBName || "Lawyer B", role: "Lawyer (Defendant)", signed: false }
+            ].filter(person => person.userId);
+
+            setSelectedNotification(judgeNotification);
+            setSigningStatus(initialSigningStatus);
+            
+            // Check if all parties have signed
+            const allSigned = initialSigningStatus.every(signer => signer.signed);
+            setAllPartiesSigned(allSigned);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking existing session:', error);
+      }
+    };
+
+    checkExistingSession();
+  }, [caseData, profile, lawyerAName, lawyerBName]);
 
   // Auto-save effect for notes
   useEffect(() => {
@@ -335,81 +531,89 @@ const CaseDetails = () => {
   };
 
   const handleEndSession = async () => {
+    if (!courtSession.isSessionActive || !profile || !caseData) return;
+
     const confirmed = window.confirm(
       "End the court session? This will:\n\n1. Send notifications to all case participants (clerk + lawyers)\n2. Request confirmations from all participants\n3. Enable blockchain signing after all confirmations\n\nContinue?",
     );
     if (confirmed) {
       try {
-        // 1. End session in database
-        const success = await courtSession.endSession(sessionNotes);
-        if (!success) {
-          toast.error("Failed to end session");
-          return;
-        }
+        // 1. Update session_logs to set status to 'paused'
+        if (courtSession.activeSession?.id) {
+          const { error: sessionError } = await supabase
+            .from('session_logs')
+            .update({
+              status: 'paused',
+              ended_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', courtSession.activeSession.id);
 
-        // 2. Get case participants and send notifications
-        if (courtSession.activeSession && caseData && profile) {
-          console.log("🔄 Starting comprehensive notification flow...");
-          
-          // Send notifications to all participants
-          const notificationSuccess = await createSessionEndNotifications({
-            caseId: caseData.id,
-            sessionId: courtSession.activeSession.id,
-            judgeId: profile.id,
-            caseNumber: caseData.case_number,
-            endedAt: new Date().toISOString(),
-            notes: sessionNotes || undefined
-          });
-
-          if (notificationSuccess) {
-            // 3. Create judge notification object and show modal
-            const judgeNotification = {
-              id: `judge-${courtSession.activeSession.id}`,
-              title: `Session Confirmation Required - ${caseData.case_number}`,
-              message: `Court session for case ${caseData.case_number} has ended. Please review details and finalize after all parties confirm.`,
-              type: 'session_ended',
-              is_read: false,
-              created_at: new Date().toISOString(),
-              requires_confirmation: true,
-              user_id: profile.id,
-              case_id: caseData.id,
-              metadata: {
-                sessionId: courtSession.activeSession.id,
-                caseNumber: caseData.case_number,
-                endedAt: new Date().toISOString(),
-                notes: sessionNotes || undefined,
-                verdict: "Verdict will be added here...",
-                evidence: [],
-                transcript: sessionNotes || "Session transcript will be available here..."
-              }
-            };
-
-            // Initialize signing status for judge modal
-            const initialSigningStatus = [
-              { userId: caseData.lawyer_party_a_id, userName: lawyerAName || "Lawyer A", role: "Lawyer (Plaintiff)", signed: false },
-              { userId: caseData.lawyer_party_b_id, userName: lawyerBName || "Lawyer B", role: "Lawyer (Defendant)", signed: false },
-              { userId: caseData.assigned_judge_id, userName: profile.full_name || "Judge", role: "Judge", signed: false }
-            ].filter(person => person.userId); // Filter out null values
-
-            setSelectedNotification(judgeNotification);
-            setSigningStatus(initialSigningStatus);
-            setAllPartiesSigned(false);
-            setShowJudgeModal(true);
-            
-            toast.success("Session ended! Review details and monitor signing progress.", {
-              duration: 5000,
-              description: `Case: ${caseData.case_number} | Modal opened for judge review.`
-            });
-          } else {
-            toast.error("Session ended but notification failed");
+          if (sessionError) {
+            console.error('Error updating session status:', sessionError);
+            toast.error("Failed to update session status");
+            return;
           }
+
+          console.log('✅ Session status updated to paused:', courtSession.activeSession.id);
         }
 
-        // 4. Update UI
-        setSessionNotes("");
-        setLastSavedNotes(null);
-        setHasNotesChanges(false);
+        // 2. Create notifications for all participants
+        const success = await createSessionEndNotifications({
+          caseId: caseData.id,
+          sessionId: courtSession.activeSession?.id || '',
+          judgeId: profile.id,
+          caseNumber: caseData.case_number || 'Unknown',
+          endedAt: new Date().toISOString(),
+          notes: sessionNotes || undefined
+        });
 
+        if (success) {
+          // Create judge notification object for modal
+          const judgeNotification = {
+            id: 'judge-notification-' + Date.now(),
+            title: `Session Ended - ${caseData.case_number}`,
+            message: `Court session has ended. All parties need to sign to confirm.`,
+            type: 'session_ended',
+            is_read: false,
+            created_at: new Date().toISOString(),
+            requires_confirmation: true,
+            caseId: caseData.id,
+            sessionId: courtSession.activeSession?.id || '',
+            user_id: profile.id,
+            metadata: {
+              sessionId: courtSession.activeSession?.id || '',
+              caseNumber: caseData.case_number,
+              endedAt: new Date().toISOString(),
+              notes: sessionNotes || undefined,
+              judgeId: profile.id
+            }
+          };
+
+          // Initialize signing status for judge modal (clerk + 2 lawyers)
+          const initialSigningStatus = [
+            { userId: caseData.clerk_id, userName:   "Clerk", role: "Clerk", signed: false },
+            { userId: caseData.lawyer_party_a_id, userName: lawyerAName || "Lawyer A", role: "Lawyer (Plaintiff)", signed: false },
+            { userId: caseData.lawyer_party_b_id, userName: lawyerBName || "Lawyer B", role: "Lawyer (Defendant)", signed: false }
+          ].filter(person => person.userId); // Filter out null values
+
+          setSelectedNotification(judgeNotification);
+          setSigningStatus(initialSigningStatus);
+          setAllPartiesSigned(false);
+          setShowJudgeModal(true);
+          setSessionEnded(true); // Mark session as ended
+
+          // Ensure UI immediately reflects that the session is no longer active,
+          // so the Sign Status button condition (sessionEnded && !isSessionActive) becomes true.
+          await courtSession.refreshSession();
+          
+          toast.success("Session ended! Review details and monitor signing progress.", {
+            duration: 5000,
+            description: `Case: ${caseData.case_number} | Session paused and notifications sent.`
+          });
+        } else {
+          toast.error("Session ended but notification failed");
+        }
       } catch (error) {
         console.error('Error ending session:', error);
         toast.error("Failed to end session");
@@ -417,52 +621,156 @@ const CaseDetails = () => {
     }
   };
 
-  const handleJudgeSign = async () => {
-    if (!profile) return;
+  const handleJudgeSign = async (_notification?: any) => {
+    if (!profile || !selectedNotification) return;
+
+    const sessionId = selectedNotification.metadata?.sessionId;
+    if (!sessionId) {
+      toast.error('Session ID not found');
+      return;
+    }
+    
+    // Check if all 3 parties (clerk + 2 lawyers) have signed
+    if (!allPartiesSigned) {
+      toast.error("Please wait for all parties (clerk and both lawyers) to sign first.");
+      return;
+    }
     
     setIsSigning(true);
     try {
-      // Here you would implement the actual signing logic
-      // For now, we'll simulate it
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Update the notification as signed
-      setSelectedNotification(prev => prev ? { ...prev, is_read: true, signature: "signed" } : null);
-      
-      toast.success("Session finalized successfully!");
-      setShowJudgeModal(false);
+      if (!isConnected) {
+        await connect();
+      }
+
+      const caseId = selectedNotification.metadata?.caseId;
+      const confirmedAt = new Date().toISOString();
+
+      const message = [
+        'NyaySutra Court Session Finalization (Judge Signature)',
+        `caseId: ${caseId || 'N/A'}`,
+        `sessionId: ${sessionId}`,
+        `judgeUserId: ${profile.id}`,
+        `timestamp: ${confirmedAt}`,
+      ].join('\n');
+
+      const signature = await signMessage(message);
+      if (!signature) {
+        toast.error('Signature was not collected from MetaMask');
+        return;
+      }
+
+      // Persist judge signature on the judge's OWN notification row for this session
+      const { error } = await supabase
+        .from('notifications')
+        .update({
+          signature,
+          confirmed_at: confirmedAt,
+          confirmed_by: profile.id,
+          is_read: true,
+        })
+        .eq('session_id', sessionId)
+        .eq('user_id', profile.id);
+
+      if (error) throw error;
+
+      setSelectedNotification(prev => prev ? {
+        ...prev,
+        signature,
+        confirmed_at: confirmedAt,
+        confirmed_by: profile.id,
+        is_read: true,
+      } : null);
+
+      toast.success('Judge signed successfully!');
+
+      // Refresh status so reopening shows correct values
+      await refreshSigningStatus(sessionId);
     } catch (error) {
       console.error('Error signing:', error);
-      toast.error("Failed to finalize session");
+      toast.error('Failed to persist judge signature');
     } finally {
       setIsSigning(false);
     }
   };
 
-  const handleSaveNotes = async () => {
-    if (!sessionNotes.trim()) {
-      setHasNotesChanges(false);
+  const handleSignStatusClick = async () => {
+    if (!caseData || !profile) return;
+    
+    // If we already have the notification, show the modal
+    if (selectedNotification) {
+      const sessionId = selectedNotification.metadata?.sessionId;
+      if (sessionId) {
+        await refreshSigningStatus(sessionId);
+      }
+      setShowJudgeModal(true);
       return;
     }
-
-    setIsSavingNotes(true);
+    
+    // Otherwise, fetch the latest session notification
     try {
-      const success = await courtSession.updateNotes(sessionNotes);
-      if (success) {
-        setLastSavedNotes(new Date());
-        setHasNotesChanges(false);
-        // Only show toast for manual saves
-        if (!isSavingNotes) {
-          toast.success("Session notes saved");
+
+      console.log("Searching for notification with:", {
+        caseId: caseData.id,
+        userId: profile.id
+      });
+      const { data: notifications } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('case_id', caseData.id)
+        .not('session_id', 'is', null)
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (notifications && notifications.length > 0) {
+        const notification = notifications[0];
+        
+        // Create judge notification object
+        const judgeNotification = {
+          id: notification.id,
+          title: notification.title,
+          message: notification.message,
+          type: (notification as any).type || 'session_ended',
+          is_read: notification.is_read ?? false,
+          created_at: notification.created_at || new Date().toISOString(),
+          confirmed_at: notification.confirmed_at,
+          confirmed_by: notification.confirmed_by,
+          requires_confirmation: (notification as any).requires_confirmation ?? undefined,
+          user_id: notification.user_id,
+          metadata: {
+            ...(((notification.metadata && typeof notification.metadata === 'object') ? notification.metadata : {}) as any),
+            caseId: (notification.metadata as any)?.caseId || notification.case_id || caseData.id,
+            sessionId: (notification.metadata as any)?.sessionId || notification.session_id,
+          },
+          signature: notification.signature
+        };
+
+        // Initialize signing status (clerk + 2 lawyers)
+        const initialSigningStatus = [
+          { userId: caseData.clerk_id, userName: "Clerk", role: "Clerk", signed: false },
+          { userId: caseData.lawyer_party_a_id, userName: lawyerAName || "Lawyer A", role: "Lawyer (Plaintiff)", signed: false },
+          { userId: caseData.lawyer_party_b_id, userName: lawyerBName || "Lawyer B", role: "Lawyer (Defendant)", signed: false }
+        ].filter(person => person.userId);
+
+        setSelectedNotification(judgeNotification);
+        setSigningStatus(initialSigningStatus);
+        
+        // Check if all parties have signed
+        const allSigned = initialSigningStatus.every(signer => signer.signed);
+        setAllPartiesSigned(allSigned);
+
+        const sessionId = (judgeNotification as any)?.metadata?.sessionId;
+        if (sessionId) {
+          await refreshSigningStatus(sessionId);
         }
+        
+        setShowJudgeModal(true);
+      } else {
+        toast.error("No session data found. Please end a session first.");
       }
     } catch (error) {
-      console.error("Error saving notes:", error);
-      if (!isSavingNotes) {
-        toast.error("Failed to save notes");
-      }
-    } finally {
-      setIsSavingNotes(false);
+      console.error('Error fetching session data:', error);
+      toast.error("Failed to load session data");
     }
   };
 
@@ -587,16 +895,8 @@ const CaseDetails = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {isJudge && !courtSession.isSessionActive && (
+          {isJudge && caseData.status !== 'closed' && !courtSession.isSessionActive && !sessionEnded && (
             <>
-              <Button
-                onClick={() => setScheduleDialogOpen(true)}
-                variant="outline"
-                className="gap-2"
-              >
-                <Calendar className="w-4 h-4" />
-                Schedule
-              </Button>
               <Button
                 onClick={handleStartSession}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
@@ -606,7 +906,18 @@ const CaseDetails = () => {
               </Button>
             </>
           )}
-          {isJudge && courtSession.isSessionActive && (
+          {isJudge && caseData.status !== 'closed' && sessionEnded && !courtSession.isSessionActive && (
+            <>
+              <Button
+                onClick={handleSignStatusClick}
+                className="bg-orange-600 hover:bg-orange-700 text-white font-medium"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Sign Status ({signingStatus.filter(s => s.signed).length}/{signingStatus.length})
+              </Button>
+            </>
+          )}
+          {isJudge && caseData.status !== 'closed' && courtSession.isSessionActive && !sessionEnded && (
             <>
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -1294,13 +1605,18 @@ const CaseDetails = () => {
         isOpen={showJudgeModal}
         onClose={() => {
           setShowJudgeModal(false);
-          setSelectedNotification(null);
         }}
         onSign={handleJudgeSign}
+        onCloseSession={handleCloseSession}
+        onScheduleSession={async () => handleScheduleSessionFromModal()}
+        onEndCase={async () => handleEndCaseFromModal()}
         isSigning={isSigning}
-        sessionStatus="final_submission"
+        isClosingSession={isClosingSession}
+        isSchedulingSession={isSchedulingSession}
+        isEndingCase={isEndingCase}
+        sessionStatus={(caseData?.status as any) || 'pending'}
         signingStatus={signingStatus}
-        isJudge={true}
+        isJudge={isJudge}
         allPartiesSigned={allPartiesSigned}
       />
     </div>

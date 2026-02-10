@@ -25,8 +25,14 @@ interface NotificationDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSign: (notification: Notification) => Promise<void>;
+  onCloseSession?: (notification: Notification) => Promise<void>;
+  onScheduleSession?: (notification: Notification) => Promise<void>;
+  onEndCase?: (notification: Notification) => Promise<void>;
   isSigning: boolean;
-  sessionStatus?: 'pending' | 'in_progress' | 'final_submission';
+  isClosingSession?: boolean;
+  isSchedulingSession?: boolean;
+  isEndingCase?: boolean;
+  sessionStatus?: 'pending' | 'in_progress' | 'final_submission' | 'closed';
   signingStatus?: Array<{
     userId: string;
     userName: string;
@@ -43,7 +49,13 @@ export const NotificationDetailModal = ({
   isOpen, 
   onClose, 
   onSign, 
+  onCloseSession,
+  onScheduleSession,
+  onEndCase,
   isSigning,
+  isClosingSession = false,
+  isSchedulingSession = false,
+  isEndingCase = false,
   sessionStatus = 'pending',
   signingStatus = [],
   isJudge = false,
@@ -54,7 +66,12 @@ export const NotificationDetailModal = ({
   if (!notification || !isOpen) return null;
 
   const hasSigned = notification.is_read;
-  const showSignButton = !notification.is_read || notification.type === 'session_ended';
+  const isCaseClosed = sessionStatus === 'closed';
+  const showSignButton = !isCaseClosed && (!notification.is_read || notification.type === 'session_ended');
+  const allFourSigned = !isCaseClosed && isJudge && allPartiesSigned && hasSigned;
+  const showCloseSessionButton = allFourSigned && !!onCloseSession;
+  const showScheduleSessionButton = allFourSigned && !!onScheduleSession;
+  const showEndCaseButton = allFourSigned && !!onEndCase;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -319,11 +336,71 @@ export const NotificationDetailModal = ({
               <Button variant="outline" onClick={onClose} className="border-white/20 text-slate-300 hover:bg-white/10 hover:text-white">
                 Close
               </Button>
+
+              {showScheduleSessionButton && (
+                <Button
+                  onClick={() => onScheduleSession?.(notification)}
+                  disabled={isSchedulingSession}
+                  className="font-semibold px-6 py-2 shadow-lg bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {isSchedulingSession ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Scheduling...
+                    </>
+                  ) : (
+                    <>
+                      <Clock className="w-4 h-4 mr-2" />
+                      Schedule Session
+                    </>
+                  )}
+                </Button>
+              )}
+
+              {showEndCaseButton && (
+                <Button
+                  onClick={() => onEndCase?.(notification)}
+                  disabled={isEndingCase}
+                  className="font-semibold px-6 py-2 shadow-lg bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {isEndingCase ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Ending...
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="w-4 h-4 mr-2" />
+                      End Case
+                    </>
+                  )}
+                </Button>
+              )}
+
+              {showCloseSessionButton && (
+                <Button
+                  onClick={() => onCloseSession?.(notification)}
+                  disabled={isClosingSession}
+                  className="font-semibold px-6 py-2 shadow-lg bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {isClosingSession ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Closing...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Close Session
+                    </>
+                  )}
+                </Button>
+              )}
               
               {showSignButton && !hasSigned && (
                 <Button 
                   onClick={() => onSign(notification)}
-                  disabled={isSigning || !isConnected || (isJudge && !allPartiesSigned)}
+                  disabled={isCaseClosed || isSigning || !isConnected || (isJudge && !allPartiesSigned)}
                   className={`font-semibold px-6 py-2 shadow-lg ${
                     isJudge && !allPartiesSigned 
                       ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 

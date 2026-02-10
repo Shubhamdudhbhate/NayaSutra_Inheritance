@@ -66,13 +66,15 @@ export const createSessionEndNotifications = async (
       return false;
     }
 
-    // 2. Prepare recipients (clerk + lawyers, NOT the judge)
+    // 2. Prepare recipients (clerk + lawyers + judge)
     const recipients = [
       participants.clerkId,
-      participants.lawyerPartyAId, 
-      participants.lawyerPartyBId
-    ].filter(Boolean) // Remove null values
-     .filter(id => id !== notificationData.judgeId); // Exclude judge
+      participants.lawyerPartyAId,
+      participants.lawyerPartyBId,
+      notificationData.judgeId,
+    ]
+      .filter(Boolean) // Remove null values
+      .filter((id, index, self) => self.indexOf(id) === index); // Deduplicate
 
     console.log('📋 Notification recipients:', recipients);
     console.log('📋 Creating REAL notifications in database:', {
@@ -98,9 +100,12 @@ export const createSessionEndNotifications = async (
         session_id: notificationData.sessionId,
         requires_confirmation: true,
         metadata: {
+          caseId: notificationData.caseId,
+          sessionId: notificationData.sessionId,
           caseNumber: notificationData.caseNumber,
           endedAt: notificationData.endedAt,
-          notes: notificationData.notes
+          notes: notificationData.notes,
+          judgeId: notificationData.judgeId,
         }
       };
 
@@ -113,6 +118,11 @@ export const createSessionEndNotifications = async (
         .single();
 
       console.log('📊 Notification creation result for recipient', recipientId, ':', result);
+
+      if (result.error) {
+        throw result.error;
+      }
+
       return result;
     });
 
@@ -129,12 +139,8 @@ export const createSessionEndNotifications = async (
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
         console.error(`❌ Notification ${index} failed:`, result.reason);
-      } else if (result.status === 'fulfilled') {
-        if (result.value.error) {
-          console.error(`❌ Notification ${index} database error:`, result.value.error);
-        } else {
-          console.log(`✅ Notification ${index} created successfully:`, result.value.data);
-        }
+      } else {
+        console.log(`✅ Notification ${index} created successfully:`, result.value.data);
       }
     });
 

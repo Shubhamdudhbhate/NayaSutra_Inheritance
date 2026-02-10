@@ -64,6 +64,8 @@ export const useCourtSession = (caseId: string) => {
         console.error('Error fetching session:', error);
       } else if (session) {
         setActiveSession(session);
+      } else {
+        setActiveSession(null);
       }
     } catch (error) {
       console.error('Error fetching session:', error);
