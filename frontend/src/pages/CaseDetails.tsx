@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock,
+  Eye,
   File,
   FileText,
   FileText as FileTextIcon,
@@ -1094,7 +1095,7 @@ const CaseDetails = () => {
                    <EvidenceUploader 
                       caseId={id || ""} 
                       uploaderUuid={profile.id} 
-                      uploaderRole={'LAWYER'} 
+                      // uploaderRole={'LAWYER'} 
                       onUploadComplete={() => {
                         toast.success("List refreshed");
                         // You could trigger a re-fetch of the vault here if they share state
