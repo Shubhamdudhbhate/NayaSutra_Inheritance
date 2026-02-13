@@ -76,15 +76,19 @@ export interface CaseParticipants {
 // --- Internal Helper ---
 
 const getJudgeContract = async (): Promise<ethers.Contract> => {
-
     if (!window.ethereum) throw new Error("Wallet not found");
+    
+    // Validate contract address is configured
+    if (!COURT_ADDR || COURT_ADDR === "") {
+        throw new Error(
+            "VITE_COURT_ADDR is not configured. " +
+            "Please set the deployed contract address in your .env.local file"
+        );
+    }
 
     const provider = new ethers.BrowserProvider(window.ethereum);
-
     const signer = await provider.getSigner();
-
     return new ethers.Contract(COURT_ADDR, JUDGE_ABI, signer);
-
 };
 
 

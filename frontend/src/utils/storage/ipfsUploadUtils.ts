@@ -47,10 +47,12 @@ export const uploadToPinata = async (file: File, caseId: string): Promise<IpfsUp
 
   // 2. Add Metadata (Optional but recommended for your Dashboard organization)
   // This does NOT create a second CID. It just names the file in the Pinata UI.
+  // Ensure caseId is a valid string for Pinata metadata
+  const safeCaseId = caseId && typeof caseId === 'string' ? caseId : 'unknown';
   const metadata = JSON.stringify({
-    name: `${caseId}_${file.name}`, // Example: "CASE-123_evidence.pdf"
+    name: `${safeCaseId}_${file.name}`, // Example: "CASE-123_evidence.pdf"
     keyvalues: {
-      caseId: caseId,
+      caseId: safeCaseId,
       uploadDate: new Date().toISOString()
     }
   });

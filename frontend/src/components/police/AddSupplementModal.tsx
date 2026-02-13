@@ -124,7 +124,7 @@ const AddSupplementModal = (
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onClick={handleClose}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-1"
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -137,7 +137,7 @@ const AddSupplementModal = (
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-lg bg-emerald-500/20 text-emerald-400">
-              <Upload className="w-5 h-5" />
+              <Upload className="w-3 h-3" />
             </div>
             <div>
               <h3 className="text-xl font-semibold text-white">
@@ -189,7 +189,7 @@ const AddSupplementModal = (
 
           {/* IPFS Upload Component */}
           <div>
-            <label className="block text-sm font-semibold text-white mb-2">
+            <label className="block text-sm font-semibold text-white mb-1">
               Upload File
             </label>
             <IpfsUpload
@@ -210,13 +210,13 @@ const AddSupplementModal = (
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add any relevant notes about this document..."
-              className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none transition-colors resize-none"
+              className="w-full px-4 py-1 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none transition-colors resize-none"
               rows={4}
             />
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-2">
             <Button
               type="button"
               onClick={handleClose}

@@ -89,6 +89,14 @@ export const createSessionEndNotifications = async (
     const notificationPromises = recipients.map((recipientId) => {
       if (!recipientId) return Promise.reject(new Error('Invalid recipient ID'));
       
+      // Determine party role based on recipient
+      let party: string | undefined;
+      if (recipientId === participants.lawyerPartyAId) {
+        party = 'prosecution'; // Party A is plaintiff/prosecution
+      } else if (recipientId === participants.lawyerPartyBId) {
+        party = 'defendant'; // Party B is defendant/defence
+      }
+      
       return supabase
         .from('notifications')
         .insert({
@@ -103,7 +111,8 @@ export const createSessionEndNotifications = async (
             sessionId: notificationData.sessionId,
             endedAt: notificationData.endedAt,
             notes: notificationData.notes,
-            judgeId: notificationData.judgeId
+            judgeId: notificationData.judgeId,
+            party: party // Add party metadata for lawyer categorization
           },
           priority: 'high',
           is_read: false

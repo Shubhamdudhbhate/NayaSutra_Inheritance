@@ -101,7 +101,7 @@ export const fetchSessionFinalizationData = async (
     
     notifications?.forEach(notification => {
       const profile = profiles.find(p => p.id === notification.user_id);
-      const role = profile?.role_category || "unknown";
+      const role = (profile?.role_category || "unknown").toLowerCase(); // Normalize to lowercase
       
       const partySig: PartySignature = {
         userId: notification.user_id,
@@ -120,7 +120,10 @@ export const fetchSessionFinalizationData = async (
         const metadata = notification.metadata as { party?: string } | null;
         if (metadata?.party === "defendant" || metadata?.party === "defense") {
           signatures.lawyer_defendant_signature = partySig;
+        } else if (metadata?.party === "prosecution" || metadata?.party === "plaintiff") {
+          signatures.lawyer_prosecution_signature = partySig;
         } else {
+          // Fallback: if party metadata not set, default to prosecution
           signatures.lawyer_prosecution_signature = partySig;
         }
       }
