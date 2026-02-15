@@ -1,49 +1,97 @@
 {
+
   "extends": "../tsconfig.json",
+
   "compilerOptions": {
+
     "target": "ESNext",
+
     "lib": [
+
       "dom",
+
       "dom.iterable",
+
       "esnext"
+
     ],
+
     "module": "esnext",
+
     "skipLibCheck": true,
+
     "moduleResolution": "bundler",
+
     "resolveJsonModule": true,
+
     "isolatedModules": true,
+
     "noEmit": true,
+
     "jsx": "react-jsx",
+
     "strict": true,
+
     "noUnusedLocals": true,
+
     "noUnusedParameters": true,
+
     "noFallthroughCasesInSwitch": true,
+
     "esModuleInterop": true,
+
     "forceConsistentCasingInFileNames": true,
+
     "baseUrl": ".",
+
     "paths": {
+
       "@/*": [
+
         "./src/*"
+
       ],
+
       "nyaysutra-shared": [
+
         "../shared/src"
+
       ],
+
       "nyaysutra-shared/*": [
+
         "../shared/src/*"
+
       ]
+
     },
+
     "typeRoots": [
+
       "./node_modules/@types",
+
       "./src/types"
+
     ]
+
   },
+
   "include": [
+
     "src/**/*",
+
     "vite-env.d.ts",
+
     "../shared/src/schemas"
+
   ],
+
   "exclude": [
+
     "node_modules",
+
     "dist"
+
   ]
+
 }
