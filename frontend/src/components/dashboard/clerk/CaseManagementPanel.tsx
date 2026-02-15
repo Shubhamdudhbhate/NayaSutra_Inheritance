@@ -9,10 +9,10 @@ import {
   Loader2,
   User,
   FileText,
-  AlertCircle,
   Eye,
   Mic,
   Scale,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { SignatureSection } from "./SignatureSection";
 import { IpfsUpload } from "@/components/cases/IpfsUpload";
 import { EvidenceList } from "@/components/cases/EvidenceList";
+import { EvidenceVault } from "@/components/cases/EvidenceVault";
 import { 
   clerkReassignJudge, 
   clerkReassignLawyer, 
@@ -31,12 +32,15 @@ import {
   type CaseDetails,
   type CaseParticipants
 } from "@/utils/BlockChain_Interface/clerk";
+import { useAuth } from "@/contexts/AuthContext";
+
 type CaseData = {
   id: string;
   case_number: string;
   title: string;
   status: string;
   assigned_judge_id: string | null;
+  assigned_clerk_id?: string | null;
   lawyer_party_a_id: string | null;
   lawyer_party_b_id: string | null;
   on_chain_case_id: string;
@@ -72,6 +76,7 @@ interface CaseManagementPanelProps {
 }
 
 export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPanelProps) => {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState("documents");
   const [judges, setJudges] = useState<Profile[]>([]);
   const [lawyers, setLawyers] = useState<Profile[]>([]);
@@ -236,8 +241,8 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
   };
 
   const handleReassignJudge = async () => {
-    if (!selectedJudge || !judgeDocUploaded) {
-      toast.error("Please select a judge and upload supporting document");
+    if (!selectedJudge) {
+      toast.error("Please select a judge");
       return;
     }
     
@@ -266,7 +271,6 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
       if (error) throw error;
       
       toast.success("Judge updated in Database!");
-      setJudgeDocUploaded(false);
       onCaseUpdate?.(); // Refresh parent
     } catch (error: any) {
       console.error(error);
@@ -685,42 +689,11 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
             
             <Button
               onClick={handleReassignJudge}
-              disabled={!selectedJudge || !judgeDocUploaded || isAssigningJudge}
+              disabled={!selectedJudge || isAssigningJudge}
               className="h-12 px-6 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 shadow-lg shadow-amber-500/20"
             >
               {isAssigningJudge ? <Loader2 className="w-5 h-5 animate-spin" /> : <> <Check className="w-5 h-5 mr-2" /> Reassign </>}
             </Button>
-          </div>
-          
-          {/* Document Upload for Judge Reassignment */}
-          <div className="border-t border-white/10 pt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <FileText className="w-4 h-4 text-slate-400" />
-              <span className="text-sm text-slate-300">Supporting Document (Required)</span>
-              {judgeDocUploaded && (
-                <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 border">
-                  <Check className="w-3 h-3 mr-1" /> Uploaded
-                </Badge>
-              )}
-            </div>
-            
-            <div className="flex gap-3">
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={(e) => e.target.files?.[0] && handleJudgeReassignmentDocumentUpload(e.target.files[0])}
-                className="flex-1 h-10 px-3 rounded-lg border border-white/10 bg-white/5 text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-                disabled={isUploadingJudgeDoc}
-              />
-              {isUploadingJudgeDoc && <Loader2 className="w-5 h-5 animate-spin text-slate-400" />}
-            </div>
-            
-            {!judgeDocUploaded && (
-              <p className="text-xs text-amber-400 mt-2 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" />
-                Document upload is required before judge reassignment
-              </p>
-            )}
           </div>
         </div>
       </div>
@@ -815,8 +788,11 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
               </div>
             </div>
             
-            <EvidenceList 
+            {/* Evidence Vault with Pending/Approved Sections */}
+            <EvidenceVault 
               caseId={caseData.id}
+              currentUserId={profile?.id || caseData.id}
+              viewMode="all"
             />
           </div>
         </TabsContent>

@@ -44,13 +44,45 @@ export default function TodayCases() {
     if (!profile?.id) return;
 
     try {
-      // Fetch cases where user is assigned as lawyer and status is hearing
-      const { data: casesData } = await supabase
+      // Get today's date range
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStart = today.toISOString();
+
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const todayEnd = tomorrow.toISOString();
+
+      // First: Get cases where lawyer is assigned AND there's a session scheduled for today
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from("session_logs")
+        .select("case_id, started_at, status")
+        .gte("started_at", todayStart)
+        .lt("started_at", todayEnd)
+        .in("status", ["active", "paused"]);
+
+      if (sessionsError) throw sessionsError;
+
+      // Get unique case IDs from today's sessions
+      const caseIdsWithSessionsToday = sessionsData?.map(s => s.case_id) || [];
+      const uniqueCaseIds = [...new Set(caseIdsWithSessionsToday)];
+
+      if (uniqueCaseIds.length === 0) {
+        setCases([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Second: Fetch case details for cases where this lawyer is assigned
+      // AND the case has a session scheduled for today
+      const { data: casesData, error: casesError } = await supabase
         .from("cases")
         .select("id, case_number, title, status, created_at")
         .or("lawyer_party_a_id.eq." + profile.id + ",lawyer_party_b_id.eq." + profile.id)
-        .eq("status", "hearing")
+        .in("id", uniqueCaseIds)
         .order("created_at", { ascending: false });
+
+      if (casesError) throw casesError;
 
       setCases(casesData || []);
     } catch (error) {

@@ -41,6 +41,7 @@ interface EvidenceVaultProps {
   caseId: string;
   currentUserId: string;
   onPreview?: (evidence: any) => void; // Made optional for now
+  viewMode?: 'personal' | 'all'; // 'personal' = only my uploads, 'all' = all case evidence
 } 
 
 // --- Helpers ---
@@ -87,6 +88,7 @@ export const EvidenceVault = ({
   caseId,
   currentUserId,
   onPreview,
+  viewMode = 'personal',
 }: EvidenceVaultProps) => {
   const [evidenceList, setEvidenceList] = useState<StagingEvidenceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,15 +102,23 @@ export const EvidenceVault = ({
 
   // --- Fetch Data from Supabase ---
   useEffect(() => {
-    const fetchMyEvidence = async () => {
+    const fetchEvidence = async () => {
       try {
         setLoading(true);
-        const { data, error } = await supabase
-          .from('staging_evidence' as any) // 'as any' bypasses the DB typings for now
+        
+        // Build query based on viewMode
+        let query = supabase
+          .from('staging_evidence' as any)
           .select('*')
           .eq('case_id', caseId)
-          .eq('uploader_uuid', currentUserId) // Filter: Show ONLY my uploads
           .order('upload_timestamp', { ascending: false });
+        
+        // Only filter by uploader if in personal mode
+        if (viewMode === 'personal') {
+          query = query.eq('uploader_uuid', currentUserId);
+        }
+        
+        const { data, error } = await query;
 
         if (error) throw error;
         setEvidenceList((data || []) as unknown as StagingEvidenceItem[]);
@@ -120,9 +130,9 @@ export const EvidenceVault = ({
     };
 
     if (caseId && currentUserId) {
-      fetchMyEvidence();
+      fetchEvidence();
     }
-  }, [caseId, currentUserId]);
+  }, [caseId, currentUserId, viewMode]);
 
   // --- Filtering ---
   const approvedEvidence = evidenceList.filter((e) => e.evidence_status === "APPROVED");

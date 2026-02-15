@@ -81,6 +81,7 @@ type DbCase = {
   created_at: string;
   updated_at: string;
   unique_identifier?: string;
+  on_chain_case_id?: string | null;
 };
 
 const CaseDetails = () => {
@@ -1172,12 +1173,17 @@ const CaseDetails = () => {
             )}
 
             <TabsContent value="evidence">
-              {/* --- REAL EVIDENCE VAULT INTEGRATION --- */}
+              {/* --- EVIDENCE VAULT WITH PENDING/APPROVED SECTIONS --- */}
               <Card className="border-border/50 bg-gray-900/20">
                 <CardContent className="p-4">
-                  <EvidenceList 
-                    caseId={id || ""} 
-                  />
+                  {/* Show EvidenceVault for staging evidence (pending/approved) */}
+                  {profile && (
+                    <EvidenceVault 
+                      caseId={id || ""} 
+                      currentUserId={profile.id}
+                      viewMode="all"
+                    />
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1507,6 +1513,7 @@ const CaseDetails = () => {
         open={scheduleDialogOpen}
         onOpenChange={setScheduleDialogOpen}
         caseId={id || ""}
+        onChainCaseId={caseData?.on_chain_case_id || caseData?.case_number || ""}
         caseNumber={caseData.case_number}
         onSuccess={() => {
           toast.success("Hearing scheduled successfully");

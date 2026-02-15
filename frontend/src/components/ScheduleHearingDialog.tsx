@@ -15,13 +15,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { judgeScheduleHearing } from "@/utils/BlockChain_Interface/judge";
+import { judgeScheduleHearing, getCaseParticipants } from "@/utils/BlockChain_Interface/judge";
 import { createSessionLog } from "@/services/sessionService";
 
 interface ScheduleHearingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   caseId: string;
+  onChainCaseId?: string;
   caseNumber: string;
   onSuccess?: () => void;
 }
@@ -30,6 +31,7 @@ export function ScheduleHearingDialog({
   open,
   onOpenChange,
   caseId,
+  onChainCaseId,
   caseNumber,
   onSuccess,
 }: ScheduleHearingDialogProps) {
@@ -43,25 +45,69 @@ export function ScheduleHearingDialog({
   const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
+  const [isAssignedJudgeOnChain, setIsAssignedJudgeOnChain] = useState<boolean | null>(null);
+  const [assignedJudgeAddress, setAssignedJudgeAddress] = useState<string | null>(null);
+  const [currentWalletAddress, setCurrentWalletAddress] = useState<string | null>(null);
 
-  // Check wallet connection on mount
+  // Check wallet connection and judge assignment on mount
   useEffect(() => {
-    const checkWalletConnection = async () => {
+    const checkWalletAndJudgeAssignment = async () => {
       if (typeof window !== 'undefined' && window.ethereum) {
         try {
           const accounts = await window.ethereum.request({ method: 'eth_accounts' }) as string[];
-          setIsWalletConnected(accounts && accounts.length > 0);
+          const connected = accounts && accounts.length > 0;
+          setIsWalletConnected(connected);
+          
+          if (connected && accounts[0]) {
+            const walletAddr = accounts[0].toLowerCase();
+            setCurrentWalletAddress(walletAddr);
+            
+            // Check if this wallet is the assigned judge on blockchain
+            try {
+              const blockchainCaseId = onChainCaseId || caseId;
+              console.log("🔍 Checking judge assignment for blockchain case ID:", blockchainCaseId);
+              const participants = await getCaseParticipants(blockchainCaseId);
+              const judgeAddress = participants.judge.toLowerCase();
+              setAssignedJudgeAddress(judgeAddress);
+              setIsAssignedJudgeOnChain(walletAddr === judgeAddress);
+              
+              if (walletAddr !== judgeAddress) {
+                console.warn("⚠️ Wallet mismatch:", {
+                  currentWallet: walletAddr,
+                  assignedJudge: judgeAddress,
+                  blockchainCaseId,
+                  databaseCaseId: caseId
+                });
+              } else {
+                console.log("✅ Wallet matches assigned judge:", {
+                  currentWallet: walletAddr,
+                  assignedJudge: judgeAddress,
+                  blockchainCaseId
+                });
+              }
+            } catch (error) {
+              console.error("Error fetching case participants:", error);
+              setIsAssignedJudgeOnChain(false);
+            }
+          } else {
+            setIsAssignedJudgeOnChain(false);
+            setCurrentWalletAddress(null);
+          }
         } catch (error) {
           console.error("Error checking wallet connection:", error);
           setIsWalletConnected(false);
+          setIsAssignedJudgeOnChain(false);
         }
       } else {
         setIsWalletConnected(false);
+        setIsAssignedJudgeOnChain(false);
       }
     };
 
-    checkWalletConnection();
-  }, []);
+    if (open) {
+      checkWalletAndJudgeAssignment();
+    }
+  }, [open, caseId, onChainCaseId]);
 
   // Check for scheduling conflicts
   const checkConflicts = async () => {
@@ -141,59 +187,80 @@ export function ScheduleHearingDialog({
 
       if (caseError) throw caseError;
 
-      // 3. Schedule on blockchain with verification
+      // 3. Schedule on blockchain with verification (only if assigned judge)
       let blockchainSuccess = false;
       let blockchainHash = null;
+      let skippedBlockchain = false;
       
-      setIsBlockchainLoading(true);
+      // Check if we should attempt blockchain scheduling
+      const shouldAttemptBlockchain = isWalletConnected && isAssignedJudgeOnChain === true;
       
-      try {
-        console.log("🔗 Attempting to schedule session on blockchain...");
-        console.log("Case ID:", caseId);
-        console.log("Scheduled Date (Unix):", scheduledDate);
-        console.log("Description:", notes || `Hearing at ${location} on ${format(parseISO(hearingDate), "MMM d, yyyy")} at ${hearingTime}`);
-        
-        const blockchainReceipt = await judgeScheduleHearing(
-          caseId,
-          scheduledDate,
-          notes || `Hearing at ${location} on ${format(parseISO(hearingDate), "MMM d, yyyy")} at ${hearingTime}`
-        );
-        
-        if (blockchainReceipt && blockchainReceipt.hash) {
-          blockchainSuccess = true;
-          blockchainHash = blockchainReceipt.hash;
-          console.log("✅ Session scheduled on blockchain:", blockchainReceipt.hash);
-          console.log("Block number:", blockchainReceipt.blockNumber);
-          console.log("Gas used:", blockchainReceipt.gasUsed?.toString());
-        } else {
-          console.warn("⚠️ Blockchain transaction returned null or invalid receipt");
+      if (!shouldAttemptBlockchain) {
+        if (!isWalletConnected) {
+          console.log("ℹ️ Skipping blockchain: Wallet not connected");
+        } else if (isAssignedJudgeOnChain === false) {
+          console.log("ℹ️ Skipping blockchain: Current wallet is not the assigned judge on blockchain");
+          console.log("   Current wallet:", currentWalletAddress);
+          console.log("   Assigned judge:", assignedJudgeAddress);
+          toast.info("Session saved to database only. Blockchain sync requires the assigned judge's wallet.");
+          skippedBlockchain = true;
         }
-      } catch (blockchainError) {
-        console.error("❌ Blockchain scheduling failed:", blockchainError);
+      }
+      
+      if (shouldAttemptBlockchain) {
+        setIsBlockchainLoading(true);
         
-        // Check for specific error types
-        if (blockchainError instanceof Error) {
-          if (blockchainError.message.includes("wallet")) {
-            toast.error("Blockchain scheduling failed: Wallet not connected. Please connect your wallet.");
-          } else if (blockchainError.message.includes("insufficient funds")) {
-            toast.error("Blockchain scheduling failed: Insufficient funds for gas fees.");
-          } else if (blockchainError.message.includes("rejected")) {
-            toast.error("Blockchain scheduling failed: Transaction rejected by user.");
+        try {
+          console.log("🔗 Attempting to schedule session on blockchain...");
+          // Use onChainCaseId for blockchain - fallback to case_number or caseId if not available
+          const blockchainCaseId = onChainCaseId || caseNumber || caseId;
+          console.log("Blockchain Case ID:", blockchainCaseId);
+          console.log("Scheduled Date (Unix):", scheduledDate);
+          console.log("Description:", notes || `Hearing at ${location} on ${format(parseISO(hearingDate), "MMM d, yyyy")} at ${hearingTime}`);
+          
+          const blockchainReceipt = await judgeScheduleHearing(
+            blockchainCaseId,
+            scheduledDate,
+            notes || `Hearing at ${location} on ${format(parseISO(hearingDate), "MMM d, yyyy")} at ${hearingTime}`
+          );
+          
+          if (blockchainReceipt && blockchainReceipt.hash) {
+            blockchainSuccess = true;
+            blockchainHash = blockchainReceipt.hash;
+            console.log("✅ Session scheduled on blockchain:", blockchainReceipt.hash);
+            console.log("Block number:", blockchainReceipt.blockNumber);
+            console.log("Gas used:", blockchainReceipt.gasUsed?.toString());
           } else {
-            toast.error(`Blockchain scheduling failed: ${blockchainError.message}`);
+            console.warn("⚠️ Blockchain transaction returned null or invalid receipt");
           }
-        } else {
-          toast.error("Blockchain scheduling failed: Unknown error occurred.");
+        } catch (blockchainError) {
+          console.error("❌ Blockchain scheduling failed:", blockchainError);
+          
+          // Check for specific error types
+          if (blockchainError instanceof Error) {
+            if (blockchainError.message.includes("Not the Judge")) {
+              toast.error("Blockchain scheduling failed: Your wallet is not the assigned judge for this case on the blockchain. Please ensure the correct judge wallet is connected.");
+            } else if (blockchainError.message.includes("wallet")) {
+              toast.error("Blockchain scheduling failed: Wallet not connected. Please connect your wallet.");
+            } else if (blockchainError.message.includes("insufficient funds")) {
+              toast.error("Blockchain scheduling failed: Insufficient funds for gas fees.");
+            } else if (blockchainError.message.includes("rejected")) {
+              toast.error("Blockchain scheduling failed: Transaction rejected by user.");
+            } else {
+              toast.error(`Blockchain scheduling failed: ${blockchainError.message}`);
+            }
+          } else {
+            toast.error("Blockchain scheduling failed: Unknown error occurred.");
+          }
+        } finally {
+          setIsBlockchainLoading(false);
         }
-      } finally {
-        setIsBlockchainLoading(false);
       }
 
-      // 4. Show appropriate success message based on blockchain status
-      if (blockchainSuccess && blockchainHash) {
+if (blockchainSuccess && blockchainHash) {
         toast.success(
           <div>
-            <div className="font-semibold">✅ Hearing scheduled successfully!</div>
+            <div className="font-semibold">Hearing scheduled successfully!</div>
             <div className="text-xs mt-1">Database + Blockchain</div>
             <div className="text-xs opacity-70">TX: {blockchainHash.slice(0, 10)}...{blockchainHash.slice(-8)}</div>
           </div>
@@ -202,7 +269,7 @@ export function ScheduleHearingDialog({
         toast.success(
           <div>
             <div className="font-semibold">✅ Hearing scheduled successfully!</div>
-            <div className="text-xs mt-1">Database only (Blockchain failed)</div>
+            <div className="text-xs mt-1 text-amber-400">Database only (Blockchain failed)</div>
           </div>
         );
       }
@@ -240,27 +307,10 @@ export function ScheduleHearingDialog({
 
         <div className="space-y-4 max-h-[60vh] overflow-y-auto py-4">
           {/* Blockchain Wallet Status */}
-          <Alert className={isWalletConnected ? "bg-emerald-500/10 border-emerald-500/30" : "bg-amber-500/10 border-amber-500/30"}>
-            <Info className={`h-4 w-4 ${isWalletConnected ? "text-emerald-400" : "text-amber-400"}`} />
-            <AlertDescription className={isWalletConnected ? "text-emerald-400" : "text-amber-400"}>
-              <div className="font-semibold mb-1">
-                Blockchain Wallet: {isWalletConnected ? "✅ Connected" : "⚠️ Not Connected"}
-              </div>
-              <div className="text-xs">
-                {isWalletConnected 
-                  ? "Session will be scheduled on both database and blockchain." 
-                  : "Connect your wallet to enable blockchain scheduling. Database only will be used."}
-              </div>
-            </AlertDescription>
-          </Alert>
 
-          {/* Timezone Info */}
-          <Alert className="bg-blue-500/10 border-blue-500/30">
-            <Info className="h-4 w-4 text-blue-400" />
-            <AlertDescription className="text-blue-400">
-              All times are in India Standard Time (IST - UTC+5:30)
-            </AlertDescription>
-          </Alert>
+
+
+  
 
           {/* Date Input */}
           <div>

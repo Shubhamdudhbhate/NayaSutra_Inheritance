@@ -168,6 +168,13 @@ export const useCourtSession = (caseId: string) => {
         setActiveSession(activatedSession);
         setScheduledSession(null);
         
+        // Update case status to "hearing" if it was "pending"
+        await supabase
+          .from('cases')
+          .update({ status: 'hearing' })
+          .eq('id', caseId)
+          .eq('status', 'pending');
+        
         const scheduledTime = new Date(scheduledSession.started_at);
         const diffMinutes = Math.round((now.getTime() - scheduledTime.getTime()) / (1000 * 60));
         const timeRelation = diffMinutes < 0 ? `starts in ${Math.abs(diffMinutes)} min` : `started ${diffMinutes} min ago`;
@@ -201,6 +208,13 @@ export const useCourtSession = (caseId: string) => {
       }
 
       console.log('✅ Database session created successfully:', session);
+
+      // Update case status to "hearing" if it was "pending"
+      await supabase
+        .from('cases')
+        .update({ status: 'hearing' })
+        .eq('id', caseId)
+        .eq('status', 'pending');
 
       // Blockchain finalization happens later via judgeFinalizeSession
       // when judge signs and session is finalized
@@ -316,6 +330,13 @@ export const useCourtSession = (caseId: string) => {
         .eq('id', scheduledSession.id);
 
       if (error) throw error;
+
+      // Update case status to "hearing" if it was "pending"
+      await supabase
+        .from('cases')
+        .update({ status: 'hearing' })
+        .eq('id', caseId)
+        .eq('status', 'pending');
 
       // Refresh to pick up the now-active session
       await fetchSession();

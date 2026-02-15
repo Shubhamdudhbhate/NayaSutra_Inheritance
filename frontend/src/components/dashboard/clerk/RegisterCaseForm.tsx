@@ -26,7 +26,7 @@ import {
   type CaseDetails,
   type CaseParticipants
 } from "@/utils/BlockChain_Interface/clerk";
-import { getFIRByNumber } from "@/services/policeService"; 
+import { getFIRByNumber, getPoliceStations, getFIRsByPoliceStation } from "@/services/policeService"; 
 
 // --- SCHEMA UPDATE ---
 // Made assignments required for validation
@@ -74,6 +74,14 @@ type VerifiedFIR = {
   blockchain_tx_hash?: string;
 };
 
+type FIROption = {
+  id: string;
+  fir_number: string;
+  accused_name: string;
+  offense_nature: string;
+  incident_date: string;
+};
+
 export const RegisterCaseForm = ({ onCaseCreated }: { onCaseCreated?: (caseData: any) => void }) => {
   const { profile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -84,6 +92,15 @@ export const RegisterCaseForm = ({ onCaseCreated }: { onCaseCreated?: (caseData:
   
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifiedFir, setVerifiedFir] = useState<VerifiedFIR | null>(null);
+  
+  // Police Station & FIR Selection State
+  const [policeStations, setPoliceStations] = useState<string[]>([]);
+  const [selectedPoliceStation, setSelectedPoliceStation] = useState<string>("");
+  const [availableFIRs, setAvailableFIRs] = useState<FIROption[]>([]);
+  const [firSearch, setFirSearch] = useState("");
+  const [firOpen, setFirOpen] = useState(false);
+  const [isLoadingStations, setIsLoadingStations] = useState(false);
+  const [isLoadingFIRs, setIsLoadingFIRs] = useState(false);
   
   // Search State
   const [judgeSearch, setJudgeSearch] = useState("");
@@ -108,7 +125,6 @@ export const RegisterCaseForm = ({ onCaseCreated }: { onCaseCreated?: (caseData:
   });
 
   const caseType = watch("caseType");
-  const firIdInput = watch("firIdInput");
   const selectedJudgeId = watch("assignedJudgeId");
   const selectedLawyerAId = watch("lawyerPartyAId");
   const selectedLawyerBId = watch("lawyerPartyBId");
@@ -136,6 +152,51 @@ export const RegisterCaseForm = ({ onCaseCreated }: { onCaseCreated?: (caseData:
     fetchPersonnel();
   }, []);
 
+  // Fetch Police Stations on mount
+  useEffect(() => {
+    const fetchPoliceStations = async () => {
+      setIsLoadingStations(true);
+      try {
+        const stations = await getPoliceStations();
+        setPoliceStations(stations);
+      } catch (error) {
+        console.error("Error fetching police stations:", error);
+        toast.error("Failed to load police stations");
+      } finally {
+        setIsLoadingStations(false);
+      }
+    };
+    fetchPoliceStations();
+  }, []);
+
+  // Fetch FIRs when police station changes
+  useEffect(() => {
+    const fetchFIRs = async () => {
+      if (!selectedPoliceStation) {
+        setAvailableFIRs([]);
+        return;
+      }
+      setIsLoadingFIRs(true);
+      try {
+        const firs = await getFIRsByPoliceStation(selectedPoliceStation);
+        const firOptions: FIROption[] = firs.map(fir => ({
+          id: fir.id,
+          fir_number: fir.fir_number,
+          accused_name: fir.accused_name || "Unknown",
+          offense_nature: fir.offense_nature || "N/A",
+          incident_date: fir.incident_date,
+        }));
+        setAvailableFIRs(firOptions);
+      } catch (error) {
+        console.error("Error fetching FIRs:", error);
+        toast.error("Failed to load FIRs for selected police station");
+      } finally {
+        setIsLoadingFIRs(false);
+      }
+    };
+    fetchFIRs();
+  }, [selectedPoliceStation]);
+
   const getPartyLabels = () => {
     if (caseType === "criminal") {
       return { partyA: "Prosecution", partyB: "Defence" };
@@ -157,28 +218,32 @@ export const RegisterCaseForm = ({ onCaseCreated }: { onCaseCreated?: (caseData:
     return person?.wallet_address;
   };
 
-  const handleVerifyFir = async () => {
-    if (!firIdInput) {
-      toast.error("Please enter an FIR Number first");
-      return;
-    }
+  const handleSelectFIR = async (firId: string) => {
     setIsVerifying(true);
     setVerifiedFir(null);
     try {
-      const firData = await getFIRByNumber(firIdInput);
+      const firData = await getFIRByNumber(firId);
       if (firData) {
         setVerifiedFir(firData as unknown as VerifiedFIR);
-        toast.success("FIR Verified Successfully!");
+        toast.success("FIR Selected and Verified!");
         setValue("partyBName", firData.accused_name || "Unknown");
       } else {
         toast.error("FIR not found.");
       }
     } catch (error) {
-      console.error("FIR Verification Error:", error);
-      toast.error("Failed to verify FIR. Please check the FIR number and try again.");
+      console.error("FIR Selection Error:", error);
+      toast.error("Failed to verify FIR. Please try again.");
     } finally {
       setIsVerifying(false);
+      setFirOpen(false);
     }
+  };
+
+  const handleClearFIR = () => {
+    setVerifiedFir(null);
+    setSelectedPoliceStation("");
+    setAvailableFIRs([]);
+    setFirSearch("");
   };
 
   // --- MAIN SUBMIT LOGIC (MULTI-STEP BLOCKCHAIN) ---
@@ -372,6 +437,9 @@ export const RegisterCaseForm = ({ onCaseCreated }: { onCaseCreated?: (caseData:
       
       reset();
       setVerifiedFir(null);
+      setSelectedPoliceStation("");
+      setAvailableFIRs([]);
+      setFirSearch("");
 
     } catch (error: any) {
       console.error("Error registering case:", error);
@@ -455,29 +523,105 @@ export const RegisterCaseForm = ({ onCaseCreated }: { onCaseCreated?: (caseData:
 
         {/* FIR Verification (Criminal Only) */}
         {caseType === "criminal" && (
-          <div className="space-y-2 p-4 bg-white/5 border border-white/10 rounded-lg">
-            <Label htmlFor="firIdInput">Link FIR Record *</Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Input id="firIdInput" placeholder="Enter FIR ID" {...register("firIdInput")} className="pl-10" disabled={!!verifiedFir} />
-                <SearchIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-              </div>
-              {!verifiedFir ? (
-                <Button type="button" onClick={handleVerifyFir} disabled={isVerifying || !firIdInput} className="bg-blue-600">
-                  {isVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
-                </Button>
-              ) : (
-                <Button type="button" variant="destructive" onClick={() => { setVerifiedFir(null); setValue("firIdInput", ""); }}>
-                  <XCircle className="w-4 h-4" />
-                </Button>
-              )}
+          <div className="space-y-4 p-4 bg-white/5 border border-white/10 rounded-lg">
+            <Label>Link FIR Record *</Label>
+            
+            {/* Step 1: Select Police Station */}
+            <div className="space-y-2">
+              <Label className="text-sm text-slate-400">Step 1: Select Police Station</Label>
+              <Select 
+                value={selectedPoliceStation} 
+                onValueChange={setSelectedPoliceStation}
+                disabled={isLoadingStations || !!verifiedFir}
+              >
+                <SelectTrigger className="w-full">
+                  {isLoadingStations ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading stations...
+                    </span>
+                  ) : (
+                    <SelectValue placeholder="Select Police Station..." />
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  {policeStations.map((station) => (
+                    <SelectItem key={station} value={station}>
+                      {station}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Step 2: Select FIR */}
+            {selectedPoliceStation && !verifiedFir && (
+              <div className="space-y-2">
+                <Label className="text-sm text-slate-400">Step 2: Select FIR</Label>
+                <Popover open={firOpen} onOpenChange={setFirOpen}>
+                  <PopoverTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      role="combobox" 
+                      className="w-full justify-between"
+                      disabled={isLoadingFIRs || availableFIRs.length === 0}
+                    >
+                      {isLoadingFIRs ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading FIRs...
+                        </span>
+                      ) : availableFIRs.length === 0 ? (
+                        "No FIRs available"
+                      ) : (
+                        "Select FIR..."
+                      )}
+                      <SearchIcon className="ml-2 h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Search FIRs..." 
+                        value={firSearch} 
+                        onValueChange={setFirSearch} 
+                      />
+                      <CommandList>
+                        <CommandGroup>
+                          {availableFIRs
+                            .filter(fir => 
+                              fir.fir_number.toLowerCase().includes(firSearch.toLowerCase()) ||
+                              fir.accused_name.toLowerCase().includes(firSearch.toLowerCase())
+                            )
+                            .map((fir) => (
+                            <CommandItem 
+                              key={fir.id} 
+                              value={fir.fir_number} 
+                              onSelect={() => handleSelectFIR(fir.fir_number)}
+                            >
+                              <div className="flex flex-col w-full">
+                                <span className="font-medium">{fir.fir_number}</span>
+                                <span className="text-xs text-slate-400">
+                                  Accused: {fir.accused_name} | {fir.offense_nature}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+
+            {/* Selected FIR Details */}
             {verifiedFir && (
               <div className="mt-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
                 <div className="flex items-start gap-3 mb-3">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5" />
                   <div className="flex-1">
-                    <p className="font-semibold text-emerald-300">FIR Verified Successfully</p>
+                    <p className="font-semibold text-emerald-300">FIR Selected and Verified</p>
                     <p className="text-slate-300 text-sm mt-1">{verifiedFir.police_station}</p>
                   </div>
                   {verifiedFir.is_on_chain && (
@@ -485,6 +629,14 @@ export const RegisterCaseForm = ({ onCaseCreated }: { onCaseCreated?: (caseData:
                       <span className="text-xs text-blue-300">On-Chain</span>
                     </div>
                   )}
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={handleClearFIR}
+                  >
+                    <XCircle className="w-4 h-4" />
+                  </Button>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">

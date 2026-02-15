@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, Check, Clock, AlertCircle, Trash2, Eye, EyeOff, PenTool } from "lucide-react";
+import { Bell, Check, Clock, AlertCircle, Trash2, PenTool } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -495,11 +495,15 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
                     <div
                       key={notification.id}
                       onClick={() => handleNotificationClick(notification)}
-                      className={`p-4 border rounded-lg transition-colors cursor-pointer ${
-                        !notification.is_read ? 'bg-blue-50/50 border-blue-200 hover:bg-blue-100/50' : 'bg-muted/30 hover:bg-muted/50'
+                      className={`p-4 border-2 rounded-lg transition-colors cursor-pointer ${
+                        // Unread = red border, Read = green border
+                        !notification.is_read 
+                          ? 'border-red-500/50 bg-red-500/5 hover:bg-red-500/10' 
+                          : 'border-green-500/30 bg-green-500/5 hover:bg-green-500/10'
                       } ${
+                        // Pending signature = amber ring
                         (notification.type === 'session_ended' || (!notification.type && notification.requires_confirmation)) && notification.requires_confirmation && !notification.signature 
-                          ? 'ring-2 ring-orange-200 hover:ring-orange-300' 
+                          ? 'ring-2 ring-amber-500/50 hover:ring-amber-500/70' 
                           : ''
                       }`}
                     >
@@ -508,7 +512,7 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
                             <p className={`text-sm font-medium truncate ${
-                              !notification.is_read ? 'text-blue-900' : 'text-gray-900'
+                              !notification.is_read ? 'text-white' : 'text-slate-300'
                             }`}>
                               {notification.title}
                             </p>
@@ -516,64 +520,40 @@ export const NotificationTab = ({ className }: NotificationTabProps) => {
                               <span className="text-xs text-muted-foreground">
                                 {formatTimeAgo(notification.created_at)}
                               </span>
-                              {!notification.is_read ? (
+                              {/* Only show delete button if notification is signed (prevents deadlock) */}
+                              {notification.signature && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    markAsRead(notification.id);
+                                    deleteNotification(notification.id);
                                   }}
-                                  className="h-6 w-6 p-0"
-                                  title="Mark as read"
+                                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-500/10"
+                                  title="Delete signed notification"
                                 >
-                                  <Eye className="w-3 h-3" />
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    markAsRead(notification.id);
-                                  }}
-                                  className="h-6 w-6 p-0"
-                                  title="Mark as unread"
-                                >
-                                  <EyeOff className="w-3 h-3" />
+                                  <Trash2 className="w-3 h-3" />
                                 </Button>
                               )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteNotification(notification.id);
-                                }}
-                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                                title="Delete notification"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
                             </div>
                           </div>
                           <p className="text-sm text-muted-foreground mt-1">
                             {notification.message}
                           </p>
                           {notification.signature ? (
-                            <Badge variant="outline" className="mt-2 text-xs bg-green-50 border-green-200 text-green-700">
+                            <Badge variant="outline" className="mt-2 text-xs bg-green-500/10 border-green-500/30 text-green-400">
                               <Check className="w-3 h-3 mr-1" />
                               Signed on {new Date(notification.confirmed_at || '').toLocaleDateString()}
                             </Badge>
                           ) : (notification.type === 'session_ended' || (!notification.type && notification.requires_confirmation)) && notification.requires_confirmation && !notification.confirmed_at ? (
-                            <Badge variant="outline" className="mt-2 text-xs bg-orange-50 border-orange-200 text-orange-700">
+                            <Badge variant="outline" className="mt-2 text-xs bg-amber-500/10 border-amber-500/30 text-amber-400">
                               <PenTool className="w-3 h-3 mr-1" />
-                              Signature Required
+                              Signature Required - Click to Sign
                             </Badge>
                           ) : notification.requires_confirmation && !notification.confirmed_at ? (
-                            <Badge variant="outline" className="mt-2 text-xs">
+                            <Badge variant="outline" className="mt-2 text-xs bg-blue-500/10 border-blue-500/30 text-blue-400">
                               <Clock className="w-3 h-3 mr-1" />
-                              Action Required
+                              Action Required - Click to View
                             </Badge>
                           ) : null}
                         </div>

@@ -145,3 +145,40 @@ export const getCaseIdFromFirId = async (firId: string): Promise<string | null> 
     return null;
   }
 };
+
+/**
+ * Get all unique police stations from FIRs
+ */
+export const getPoliceStations = async (): Promise<string[]> => {
+  const { data, error } = await supabase
+    .from('firs')
+    .select('police_station')
+    .order('police_station', { ascending: true });
+
+  if (error) {
+    console.error("Error fetching police stations:", error);
+    throw error;
+  }
+
+  // Extract unique police stations
+  const stations = [...new Set((data ?? []).map(fir => fir.police_station).filter(Boolean))];
+  return stations;
+};
+
+/**
+ * Get FIRs filtered by police station
+ */
+export const getFIRsByPoliceStation = async (policeStation: string): Promise<FIR[]> => {
+  const { data, error } = await supabase
+    .from('firs')
+    .select('*')
+    .eq('police_station', policeStation)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error("Error fetching FIRs by police station:", error);
+    throw error;
+  }
+
+  return (data ?? []) as FIR[];
+};
