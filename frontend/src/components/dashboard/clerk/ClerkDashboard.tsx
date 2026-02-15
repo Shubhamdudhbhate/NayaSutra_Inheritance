@@ -3,6 +3,9 @@ import { motion } from "framer-motion";
 import { Briefcase, ArrowLeft, Bell } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNotificationAlerts } from "@/hooks/useNotificationAlerts";
 // Components
 import { RegisterCaseForm } from "./RegisterCaseForm";
 import { SearchCase, CaseResult } from "./SearchCase"; 
@@ -12,10 +15,25 @@ import { NotificationTab } from "@/components/notifications/NotificationTab";
 
 export const ClerkDashboard = () => {
   const [activeTab, setActiveTab] = useState("cases");
+  const { profile } = useAuth();
+  
+  // Real-time notification alerts
+  const { notificationCount, hasNewNotification } = useNotificationAlerts({
+    userId: profile?.id,
+    enabled: true,
+    showToasts: true,
+  });
   
   // Navigation State
   const [viewMode, setViewMode] = useState<"list" | "manage">("list");
   const [selectedCase, setSelectedCase] = useState<CaseResult & { fir_id?: string } | null>(null);
+
+  // Handler for when a new case is created
+  const handleCaseCreated = (newCase: any) => {
+    setSelectedCase(newCase);
+    setViewMode("manage");
+    setActiveTab("cases");
+  };
 
   // Handlers
   const handleCaseSelect = async (caseData: CaseResult & { fir_id?: string }) => {
@@ -51,9 +69,16 @@ export const ClerkDashboard = () => {
           variant="ghost"
           size="sm"
           onClick={() => setActiveTab("notifications")}
-          className="relative text-slate-400 hover:text-white hover:bg-white/10 p-2"
+          className={`relative text-slate-400 hover:text-white hover:bg-white/10 p-2 ${
+            hasNewNotification ? "animate-bounce" : ""
+          }`}
         >
-          <Bell className="w-5 h-5" />
+          <Bell className={`w-5 h-5 ${hasNewNotification ? "text-amber-400" : ""}`} />
+          {notificationCount > 0 && (
+            <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-red-500 text-white animate-pulse">
+              {notificationCount > 9 ? "9+" : notificationCount}
+            </Badge>
+          )}
         </Button>
       </motion.div>
 
@@ -65,7 +90,7 @@ export const ClerkDashboard = () => {
         </TabsList>
 
         <TabsContent value="register">
-          <RegisterCaseForm />
+          <RegisterCaseForm onCaseCreated={handleCaseCreated} />
         </TabsContent>
 
         <TabsContent value="cases">

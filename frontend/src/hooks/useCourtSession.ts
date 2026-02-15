@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
-type SessionStatus = 'active' | 'ended' | 'paused';
+type SessionStatus = 'active' | 'ended' | 'paused' | 'scheduled';
 type PermissionStatus = 'pending' | 'granted' | 'denied' | 'expired';
 
 export interface CourtSession {
@@ -33,6 +33,7 @@ export interface PermissionRequest {
 export const useCourtSession = (caseId: string) => {
   const { profile } = useAuth();
   const [activeSession, setActiveSession] = useState<CourtSession | null>(null);
+  const [scheduledSession, setScheduledSession] = useState<CourtSession | null>(null);
   const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
   const [myPermission, setMyPermission] = useState<PermissionRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,18 +56,35 @@ export const useCourtSession = (caseId: string) => {
     }
 
     try {
-      const { data: session, error } = await supabase
+      // First check for active session
+      const { data: activeSession, error: activeError } = await supabase
         .from('session_logs')
         .select('*')
         .eq('case_id', caseId)
         .eq('status', 'active')
         .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching session:', error);
-      } else if (session) {
-        setActiveSession(session);
+      if (activeError) {
+        console.error('Error fetching active session:', activeError);
+      } else if (activeSession) {
+        setActiveSession(activeSession);
       } else {
+        // No active session, check for scheduled sessions
+        const { data: scheduledSessionData, error: scheduledError } = await supabase
+          .from('session_logs')
+          .select('*')
+          .eq('case_id', caseId)
+          .eq('status', 'scheduled' as any) // Type assertion for 'scheduled'
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (scheduledError) {
+          console.error('Error fetching scheduled session:', scheduledError);
+        }
+        
+        // Store scheduled session but don't set as active
+        setScheduledSession(scheduledSessionData);
         setActiveSession(null);
       }
     } catch (error) {
@@ -99,6 +117,68 @@ export const useCourtSession = (caseId: string) => {
 
     try {
       console.log('🚀 Starting new court session for case:', caseId);
+      
+      // Check for scheduled sessions within ±20 minutes
+      const now = new Date();
+      const twentyMinutesBefore = new Date(now.getTime() - 20 * 60 * 1000);
+      const twentyMinutesAfter = new Date(now.getTime() + 20 * 60 * 1000);
+
+      const { data: nearbyScheduledSessions, error: scheduledError } = await supabase
+        .from('session_logs')
+        .select('*')
+        .eq('case_id', caseId)
+        .eq('status', 'scheduled' as any)
+        .gte('started_at', twentyMinutesBefore.toISOString())
+        .lte('started_at', twentyMinutesAfter.toISOString())
+        .order('started_at', { ascending: true })
+        .limit(1);
+
+      if (scheduledError) {
+        console.error('❌ Error checking scheduled sessions:', scheduledError);
+      }
+
+      // If found a scheduled session within the time window, activate it
+      if (nearbyScheduledSessions && nearbyScheduledSessions.length > 0) {
+        const scheduledSession = nearbyScheduledSessions[0];
+        console.log('📅 Found scheduled session within ±20 minutes:', scheduledSession.id);
+        console.log('Scheduled time:', scheduledSession.started_at);
+        console.log('Current time:', now.toISOString());
+
+        const { error: updateError } = await supabase
+          .from('session_logs')
+          .update({
+            status: 'active',
+            started_at: now.toISOString(), // Update to actual start time
+            updated_at: now.toISOString()
+          })
+          .eq('id', scheduledSession.id);
+
+        if (updateError) {
+          console.error('❌ Error activating scheduled session:', updateError);
+          toast.error('Failed to activate scheduled session');
+          return null;
+        }
+
+        const activatedSession: CourtSession = {
+          ...scheduledSession,
+          status: 'active',
+          started_at: now.toISOString()
+        };
+
+        setActiveSession(activatedSession);
+        setScheduledSession(null);
+        
+        const scheduledTime = new Date(scheduledSession.started_at);
+        const diffMinutes = Math.round((now.getTime() - scheduledTime.getTime()) / (1000 * 60));
+        const timeRelation = diffMinutes < 0 ? `starts in ${Math.abs(diffMinutes)} min` : `started ${diffMinutes} min ago`;
+        
+        toast.success(`Scheduled session activated (${timeRelation})`);
+        console.log('✅ Scheduled session activated successfully');
+        return activatedSession;
+      }
+
+      // No nearby scheduled session found, create new one
+      console.log('📅 No scheduled session found within ±20 minutes, creating new session');
       
       // First, create session in database
       const { data: session, error } = await supabase
@@ -134,6 +214,7 @@ export const useCourtSession = (caseId: string) => {
       return null;
     } finally {
       setIsLoading(false);
+      setIsBlockchainLoading(false);
     }
   };
 
@@ -219,8 +300,38 @@ export const useCourtSession = (caseId: string) => {
     return false;
   };
 
+  const activateScheduledSession = async () => {
+    if (!scheduledSession || !isJudge) {
+      toast.error('No scheduled session to activate or you are not a judge');
+      return false;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('session_logs')
+        .update({
+          status: 'active',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', scheduledSession.id);
+
+      if (error) throw error;
+
+      // Refresh to pick up the now-active session
+      await fetchSession();
+      
+      toast.success('Scheduled session activated successfully');
+      return true;
+    } catch (error) {
+      console.error('Error activating scheduled session:', error);
+      toast.error('Failed to activate scheduled session');
+      return false;
+    }
+  };
+
   return {
     activeSession,
+    scheduledSession,
     permissionRequests,
     myPermission,
     isLoading,
@@ -234,6 +345,7 @@ export const useCourtSession = (caseId: string) => {
     updateNotes,
     requestPermission,
     respondToPermission,
+    activateScheduledSession,
     refreshSession: fetchSession,
     refreshPermissions: () => fetchPermissions(activeSession?.id),
   };

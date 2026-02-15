@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 // Import all dashboard components
 import { PoliceDashboard } from "@/components/dashboard/PoliceDashboard";
 import { JudiciaryDashboard } from "@/components/dashboard/JudiciaryDashboard";
-import { PractitionerDashboard } from "@/components/dashboard/PractitionerDashboard";
 import { ClerkDashboard } from "@/components/dashboard/clerk/ClerkDashboard";
 import { PublicDashboard } from "@/components/dashboard/PublicDashboard";
 

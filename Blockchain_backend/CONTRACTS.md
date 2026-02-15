@@ -1,14 +1,14 @@
 # Smart Contracts Documentation
 
 ## Overview
-this is the overview of all the neccesarry blockchain contracts that will be needed and a breif summary of the contracts 
+This document provides comprehensive documentation for the NayaSutra blockchain smart contracts that power the digital court management system. These contracts ensure transparency, immutability, and proper access control for all judicial proceedings.
 
 ---
 
 ## 1. CourtAccessControl.sol
 
 ### Purpose
-Central role management contract that extends OpenZeppelin's `AccessControl` to manage permissions for different judicial system participants.
+Central role management contract that extends OpenZeppelin's `AccessControl` to manage permissions for different judicial system participants. This contract ensures that only authorized users can perform specific actions within the court system.
 
 ### Contract Details
 ```solidity
@@ -26,32 +26,38 @@ bytes32 public constant POLICE_ROLE = keccak256("POLICE_ROLE");
 bytes32 public constant COURT_SYSTEM_ROLE = keccak256("COURT_SYSTEM_ROLE");
 ```
 
-#### Functions
+#### User Guide: Role Functions
 
-| Function | Visibility | Returns | Purpose |
-|----------|-----------|---------|---------|
-| `isJudge(address)` | external, view | bool | Check if address has JUDGE_ROLE |
-| `isLawyer(address)` | external, view | bool | Check if address has LAWYER_ROLE |
-| `isPolice(address)` | external, view | bool | Check if address has POLICE_ROLE |
-| `isCourtSytem(address)` | external, view | bool | Check if address has COURT_SYSTEM_ROLE |
+| Function | What it Does | Who Can Use It | Simple Explanation |
+|----------|--------------|----------------|-------------------|
+| `isJudge(address)` | Checks if someone is a judge | Anyone | "Is this person a judge?" |
+| `isLawyer(address)` | Checks if someone is a lawyer | Anyone | "Is this person a lawyer?" |
+| `isPolice(address)` | Checks if someone is police | Anyone | "Is this person a police officer?" |
+| `isCourtSytem(address)` | Checks if address is court system | Anyone | "Is this a court system contract?" |
 
-#### Inherited from AccessControl
-- `grantRole(bytes32 role, address account)`
-- `revokeRole(bytes32 role, address account)`
-- `hasRole(bytes32 role, address account)`
-- `renounceRole(bytes32 role, address account)`
+#### Admin Functions (Inherited from AccessControl)
+- `grantRole(bytes32 role, address account)` - Give someone a role
+- `revokeRole(bytes32 role, address account)` - Take away someone's role
+- `hasRole(bytes32 role, address account)` - Check if someone has a role
 
-### Use Cases
-- Administrative role assignment for new participants
-- Role verification in other contracts
-- Centralized permission management
+### Real-World Usage
+```javascript
+// Example: Check if a user can perform judge actions
+if (await courtAccess.isJudge(userAddress)) {
+    // Allow judge actions
+    console.log("User is a judge");
+} else {
+    // Deny access
+    console.log("User is not a judge");
+}
+```
 
 ---
 
 ## 2. FIRRegistry.sol
 
 ### Purpose
-Manages First Information Reports (FIRs) - the initial police report filed when a crime is reported. Provides immutable record of police investigations with support for supplementary reports.
+Manages First Information Reports (FIRs) - the initial police report filed when a crime is reported. This contract creates an immutable, tamper-proof record of all police investigations with support for supplementary reports and evidence.
 
 ### Contract Details
 ```solidity
@@ -64,115 +70,117 @@ contract FIRRegistry
 ```solidity
 struct Report {
     string ipfsCid;          // IPFS hash of encrypted PDF document
-    bytes32 contentHash;     // Keccak256 hash for integrity verification
-    uint256 timestamp;       // Block timestamp when filed
-    address filedBy;         // Police officer address
-    bool isSupplementary;    // Flag: true for updates, false for original
+    bytes32 contentHash;     // Digital fingerprint for verification
+    uint256 timestamp;       // When the report was filed
+    address filedBy;         // Police officer who filed it
+    bool isSupplementary;    // True for updates, false for original FIR
 }
 ```
 
 #### FIR Struct
 ```solidity
 struct FIR {
-    uint256 id;              // Unique FIR identifier
+    string id;               // Unique FIR number (e.g., "FIR-2024-001")
     string stationId;        // Police station identifier
     string accused;          // Name of accused person
     string filer;            // Name of person filing report
-    string[] ipcSections;    // Array of applicable IPC sections (e.g., "420", "304")
-    bool isForwarded;        // Immutable flag: true once forwarded to court
+    string[] ipcSections;    // Legal sections violated (e.g., ["420", "304"])
+    bool isForwarded;        // True once sent to court (then locked)
     address filedBy;         // Police officer who filed FIR
-    uint256[] reportIndexes; // Array of all report IDs (original + supplementary)
+    uint256[] reportIndexes; // List of all report IDs for this FIR
 }
 ```
 
-#### Key Variables
-```solidity
-mapping(uint256 => FIR) public firs;              // FIR ID → FIR details
-mapping(uint256 => Report) public allReports;    // Report ID → Report details
-uint256 private _firIds;                         // Auto-incrementing FIR counter
-uint256 private _reportIds;                      // Auto-incrementing Report counter
+### User Guide: Police Functions
+
+#### `fileFIR()` - File a New Police Report
+**When to Use**: When a crime is first reported at the police station
+
+**What You Need**:
+- FIR number (e.g., "FIR-2024-001")
+- Police station ID
+- List of IPC sections violated
+- IPFS hash of the FIR document (encrypted PDF)
+- Name of accused person
+- Name of person filing the report
+- Digital fingerprint of the document
+
+**What Happens**:
+1. Creates a new FIR record
+2. Links the first police report
+3. Makes the FIR publicly viewable (but not editable)
+
+**Example**:
+```javascript
+// Police officer files a new FIR
+const result = await firRegistry.fileFIR(
+    "FIR-2024-001",           // FIR number
+    "PS-Downtown",           // Police station
+    ["420", "506"],          // IPC sections (cheating, criminal intimidation)
+    "QmXyz...ipfs",          // IPFS hash of FIR document
+    "John Doe",              // Accused name
+    "Jane Smith",            // Complainant name
+    "0xabc123..."            // Document hash
+);
+console.log("FIR filed:", result);
 ```
 
-### Functions
+#### `addSupplementaryReport()` - Add Updates to Existing FIR
+**When to Use**: When new evidence or information comes up after the initial FIR
 
-#### Write Functions (State-Changing)
+**What You Need**:
+- FIR number to update
+- IPFS hash of the supplementary document
+- Digital fingerprint of the new document
 
-##### `fileFIR()`
-**Signature**: `function fileFIR(string _stationId, string[] _ipcSections, string _ipfsCid, string _accused, string _filer, address _filedBy, bytes32 _contentHash) external onlyPolice returns (uint256)`
+**Important**: You can only add supplementary reports BEFORE the FIR is sent to court!
 
-**Purpose**: File a new FIR with initial report
+**Example**:
+```javascript
+// Add new evidence to existing FIR
+await firRegistry.addSupplementaryReport(
+    "FIR-2024-001",          // Existing FIR
+    "QmSupplementary...ipfs", // New document
+    "0xdef456..."            // New document hash
+);
+```
 
-**Access**: Only accounts with POLICE_ROLE
+#### `addProofLink()` - Add Evidence Links
+**When to Use**: To add links to digital evidence (photos, videos, documents)
 
-**Parameters**:
-- `_stationId`: Police station identifier
-- `_ipcSections`: Array of IPC sections (e.g., ["420", "498A"])
-- `_ipfsCid`: IPFS content identifier of encrypted PDF
-- `_accused`: Name of accused person
-- `_filer`: Name of person filing report
-- `_filedBy`: Address of filing police officer
-- `_contentHash`: Keccak256 hash of document for verification
+**What You Need**:
+- FIR number
+- URL or IPFS link to evidence
 
-**Returns**: New FIR ID
+**Example**:
+```javascript
+// Add photo evidence
+await firRegistry.addProofLink(
+    "FIR-2024-001",
+    "https://storage.example.com/evidence/photo1.jpg"
+);
+```
 
-**Events**: Emits `FIRFiled(firId, stationId, ipcSections)`
+### User Guide: View Functions
 
----
-
-##### `addSupplementaryReport()`
-**Signature**: `function addSupplementaryReport(uint256 _firId, string _ipfsCid, bytes32 _contentHash) external onlyPolice`
-
-**Purpose**: Add supplementary report to existing FIR
-
-**Access**: Only accounts with POLICE_ROLE
-
-**Parameters**:
-- `_firId`: ID of existing FIR
-- `_ipfsCid`: IPFS hash of supplementary document
-- `_contentHash`: Document hash for integrity check
-
-**Restrictions**:
-- FIR must exist
-- FIR must NOT be forwarded to court (immutable after forwarding)
-
-**Events**: Emits `SupplementaryFiled(firId, reportId)`
-
----
-
-##### `markForwarded()`
-**Signature**: `function markForwarded(uint256 _firId, uint256 _caseId) external onlyCourtSession`
-
-**Purpose**: Mark FIR as forwarded to court (makes it immutable)
-
-**Access**: Only accounts with COURT_SYSTEM_ROLE (CourtSession contract)
-
-**Parameters**:
-- `_firId`: FIR to mark as forwarded
-- `_caseId`: Corresponding court case ID
-
-**Events**: Emits `FIRForwarded(firId, caseId)`
-
----
-
-#### Read Functions (View)
-
-| Function | Returns | Purpose |
-|----------|---------|---------|
-| `getReportCount(uint256 _firId)` | uint256 | Number of reports (original + supplementary) for a FIR |
-| `getIpcSections(uint256 _firId)` | string[] | IPC sections applicable to a FIR |
-| `getallReportIds(uint256 _firId)` | uint256[] | All report IDs associated with a FIR |
+| Function | What it Returns | When to Use |
+|----------|----------------|-------------|
+| `getReportCount(firId)` | Number of reports for this FIR | Check how many reports exist |
+| `getIpcSections(firId)` | List of legal sections | See what laws were broken |
+| `getallReportIds(firId)` | All report IDs | Get all report numbers |
+| `getFirProofs(firId)` | All evidence links | View all evidence |
 
 ### Workflow Example
 ```
-1. Police files FIR #1 (fileFIR)
+1. Crime Reported → Police files FIR #1 (fileFIR)
    └─ Creates FIR with initial Report #1
    
-2. Police adds supplementary info (addSupplementaryReport)
+2. New Evidence Found → Police adds supplementary report (addSupplementaryReport)
    └─ Adds Report #2 to FIR #1
    
-3. Clerk creates court case from FIR (CourtSession)
-   └─ Calls markForwarded(1, caseId)
-   └─ FIR #1 now immutable, no more reports can be added
+3. Case Goes to Court → Clerk creates court case
+   └─ Calls markForwarded("FIR-2024-001", caseId)
+   └─ FIR #1 now locked forever, no more changes allowed
 ```
 
 ---
@@ -180,369 +188,406 @@ uint256 private _reportIds;                      // Auto-incrementing Report cou
 ## 3. CourtSession.sol
 
 ### Purpose
-Central case management contract. Handles case creation, role assignments, session scheduling, and recording of court proceedings.
+The heart of the court system - manages case creation, role assignments, session scheduling, and recording of all court proceedings. This contract ensures proper judicial process and maintains an immutable record of all court activities.
 
 ### Key Structures
 
-#### Case Enum
+#### Case Status
 ```solidity
 enum CaseStatus {
-    CREATED,        // 0 - Case just created
-    PRE_TRIAL,      // 1 - Pre-trial motions phase
-    IN_SESSION,     // 2 - Active court proceedings
-    CLOSED          // 3 - Case concluded
+    CREATED,        // Case just created, waiting for assignments
+    PRE_TRIAL,      // Pre-trial motions and preparations
+    IN_SESSION,     // Active court proceedings
+    CLOSED          // Case concluded
 }
 ```
 
 #### Case Struct
 ```solidity
 struct Case {
-    uint256 id;              // Unique case identifier
-    uint256 linkedFirId;     // Reference to original FIR (0 if no FIR)
-    string title;            // Case title/name
-    string accused;          // Name of accused (from linked FIR)
-    string filer;            // Name of complainant (from linked FIR)
-    CaseStatus status;       // Current case status
-    address assignedJudge;   // Ethereum address of assigned judge
-    uint256 creationDate;    // Block timestamp of case creation
-    address defence;         // Address of defence lawyer
-    address prosecution;     // Address of prosecution lawyer
-    uint256 nextSessionId;   // ID of next scheduled session
-    string metaData;         // Additional case metadata (JSON)
-    address assignedClerk;   // Clerk who created the case
+    string id;                  // Case number (e.g., "CASE-2024-001")
+    string linkedFirId;         // Reference to FIR (if criminal case)
+    string title;               // Case title/name
+    string accused;             // Name of accused (from FIR)
+    string filer;               // Name of complainant (from FIR)
+    CaseStatus status;          // Current case status
+    address assignedJudge;      // Judge's Ethereum address
+    uint256 creationDate;       // When case was created
+    address defence;            // Defence lawyer's address
+    address prosecution;        // Prosecution lawyer's address
+    uint256 nextSessionId;      // ID for next scheduled session
+    string metaData;            // Additional case information (JSON)
+    address assignedClerk;       // Clerk who created the case
 }
 ```
 
-#### SessionDetails Struct
+#### Session Details
 ```solidity
 struct SessionDetails {
-    uint256 sessionId;       // Session number for this case
-    uint256 scheduledDate;   // Unix timestamp of scheduled hearing
-    string description;      // Hearing description/agenda
-    bool isConcluded;        // Whether hearing concluded
+    uint256 sessionId;          // Session number for this case
+    uint256 scheduledDate;      // When the hearing is scheduled
+    string description;         // What will be discussed
+    bool isConcluded;           // Whether hearing is finished
 }
 ```
 
-#### CurrSession Struct
+#### Completed Session
 ```solidity
 struct CurrSession {
-    uint256 caseId;              // Associated case ID
+    string caseId;              // Associated case
     uint256 sessionId;           // Session number
-    string ipfsCid;              // IPFS hash of session recording/transcript
-    bool isAdjourned;            // True if hearing adjourned
-    uint256 startTimestamp;      // When session started (block.timestamp)
-    uint256 endTimestamp;        // When session ended (0 if ongoing)
+    string ipfsCid;              // IPFS hash of session recording
+    bool isAdjourned;           // True if postponed, false if finished
+    uint256 startTimestamp;     // When session started
+    uint256 endTimestamp;       // When session ended
 }
 ```
 
-#### Key Variables
-```solidity
-mapping(uint256 => Case) public cases;                          // Case ID → Case details
-mapping(uint256 => address) public assignedJudgeMap;           // Case ID → Judge address
-mapping(uint256 => mapping(string => address)) public isAssignedLawyer;  // Case → Role → Lawyer
-mapping(uint256 => mapping(uint256 => SessionDetails)) public NextSessions;  // Case → Session ID → Details
-mapping(uint256 => mapping(uint256 => CurrSession)) public Sessions;  // Case → Session ID → Current session
+### User Guide: Clerk Functions
+
+#### `createCase()` - Create New Court Case
+**When to Use**: When starting a new legal case (civil or criminal)
+
+**What You Need**:
+- Case number (e.g., "CASE-2024-001")
+- Case title
+- FIR number (for criminal cases, empty for civil)
+- Prosecution lawyer's address
+- Defence lawyer's address
+- Judge's address
+- Additional case information
+
+**What Happens**:
+1. Creates the case record
+2. Links to FIR if provided
+3. Assigns all participants
+4. Sets status to "CREATED"
+5. Marks FIR as forwarded (if criminal case)
+
+**Example**:
+```javascript
+// Clerk creates a new case
+await courtSession.createCase(
+    "CASE-2024-001",          // Case number
+    "State vs John Doe",      // Case title
+    "FIR-2024-001",           // Linked FIR (empty for civil cases)
+    "0xprosecution...",       // Prosecution lawyer address
+    "0xdefence...",           // Defence lawyer address
+    "0xjudge...",             // Judge address
+    '{"type": "criminal", "severity": "high"}' // Case metadata
+);
 ```
 
-### Functions
+#### `reassignJudge()` - Change the Judge
+**When to Use**: When the current judge cannot continue (transfer, retirement, etc.)
 
-#### Write Functions
+**What You Need**:
+- Case number
+- New judge's address
 
-##### `createCase()`
-**Signature**: `function createCase(string _title, uint256 _firId, string _metaData) external onlyClerk returns (uint256)`
+**Example**:
+```javascript
+await courtSession.reassignJudge(
+    "CASE-2024-001",
+    "0xnewJudge..."
+);
+```
 
-**Purpose**: Create new court case (optionally linked to FIR)
+#### `reassignLawyer()` - Change a Lawyer
+**When to Use**: When replacing prosecution or defence lawyer
 
-**Access**: Only accounts with CLERK_ROLE
+**What You Need**:
+- Case number
+- New lawyer's address
+- Role: "defence" or "prosecution"
 
-**Parameters**:
-- `_title`: Case title
-- `_firId`: FIR ID to link (0 for independent cases)
-- `_metaData`: Additional JSON metadata
+**Example**:
+```javascript
+// Replace defence lawyer
+await courtSession.reassignLawyer(
+    "CASE-2024-001",
+    "0xnewDefenceLawyer...",
+    "defence"
+);
+```
 
-**Returns**: New case ID
+### User Guide: Judge Functions
 
-**Actions**:
-- Increments case counter
-- Marks FIR as forwarded if _firId > 0
-- Copies accused/filer from FIR if linked
-- Creates Case with CREATED status
-- Records clerk who created case
+#### `scheduleSession()` - Schedule Court Hearing
+**When to Use**: To set a date for the next court session
 
-**Events**: Emits `CaseCreated(caseId, title, firId)`
+**What You Need**:
+- Case number
+- Date and time (Unix timestamp)
+- Description of what will be discussed
 
----
+**What Happens**:
+1. Creates a new session entry
+2. Sets the case status to "IN_SESSION"
+3. Increments session counter
 
-##### `assignJudge()`
-**Signature**: `function assignJudge(uint256 _caseId, address _judge) external onlyClerk`
+**Example**:
+```javascript
+// Schedule hearing for next month
+const nextMonth = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
+await courtSession.scheduleSession(
+    "CASE-2024-001",
+    nextMonth,
+    "Hearing on bail application and evidence review"
+);
+```
 
-**Purpose**: Assign judge to case
+#### `finalizeSession()` - End Court Session
+**When to Use**: After a court session is completed
 
-**Access**: Only CLERK_ROLE
+**What You Need**:
+- Case number
+- IPFS hash of session recording/transcript
+- Whether the session was adjourned (postponed)
+- Session start time
+- Session end time
 
-**Parameters**:
-- `_caseId`: Case ID
-- `_judge`: Ethereum address of judge
+**What Happens**:
+1. Records the session details
+2. Stores the IPFS hash of proceedings
+3. Updates case status
+4. Emits event for public record
 
-**Validation**: Judge must have JUDGE_ROLE
+**Example**:
+```javascript
+const startTime = Math.floor(Date.now() / 1000) - (2 * 60 * 60); // 2 hours ago
+const endTime = Math.floor(Date.now() / 1000); // Now
 
-**Events**: Emits `JudgeAssigned(caseId, judge)`
+await courtSession.finalizeSession(
+    "CASE-2024-001",
+    "QmSessionRecording...ipfs",  // IPFS hash of recording
+    false,                        // Not adjourned - session completed
+    startTime,                    // Session started 2 hours ago
+    endTime                       // Session ended now
+);
+```
 
----
+#### `addProofLink()` - Add Case Evidence
+**When to Use**: To add evidence links to the case record
 
-##### `assignLawyer()`
-**Signature**: `function assignLawyer(uint256 _caseId, address _lawyer, string _role) external onlyClerk`
+**What You Need**:
+- Case number
+- Evidence URL or IPFS link
 
-**Purpose**: Assign lawyer to case as defence or prosecution
+**Example**:
+```javascript
+await courtSession.addProofLink(
+    "CASE-2024-001",
+    "https://storage.example.com/evidence/document.pdf"
+);
+```
 
-**Access**: Only CLERK_ROLE
+#### `updateNextSessionState()` - Modify Scheduled Session
+**When to Use**: When you need to change the date or description of a scheduled session
 
-**Parameters**:
-- `_caseId`: Case ID
-- `_lawyer`: Lawyer address
-- `_role`: "defence" or "prosecution"
+**What You Need**:
+- Case number
+- Session ID
+- New date
+- New description
 
-**Validation**:
-- Lawyer must have LAWYER_ROLE
-- Cannot assign same lawyer twice to same role
+**Example**:
+```javascript
+await courtSession.updateNextSessionState(
+    "CASE-2024-001",
+    1,                           // Session ID 1
+    newDate,                     // New date (Unix timestamp)
+    "Updated: Additional witnesses to be examined"
+);
+```
 
-**Events**: Emits `LawyerAssigned(caseId, lawyer, role)`
+### User Guide: View Functions
 
----
+| Function | What it Returns | When to Use |
+|----------|----------------|-------------|
+| `getCaseSigners(caseId)` | All participant addresses | Get judge, lawyers, clerk for case |
+| `getSessionDetails(caseId, sessionId)` | Session information | Get details of a past session |
+| `getNextSessionDetails(caseId)` | Upcoming session info | See when next hearing is scheduled |
+| `getCaseProofLinks(caseId)` | All evidence links | View all case evidence |
 
-##### `scheduleSession()`
-**Signature**: `function scheduleSession(uint256 _caseId, uint256 _date, string _desc) external onlyAssignedJudge(caseId)`
+### Complete Case Workflow
+```
+1. Case Creation (Clerk)
+   └─ createCase() → Links FIR, assigns participants
 
-**Purpose**: Schedule court session/hearing
+2. Pre-trial Setup (Judge)
+   └─ scheduleSession() → Sets first hearing date
 
-**Access**: Only the judge assigned to the case
+3. Court Proceedings (Judge)
+   └─ finalizeSession() → Records each hearing
+   └─ addProofLink() → Adds evidence during trial
 
-**Parameters**:
-- `_caseId`: Case ID
-- `_date`: Unix timestamp of scheduled date
-- `_desc`: Session description/agenda
-
-**Actions**:
-- Creates SessionDetails for next session
-- Updates case status to IN_SESSION
-- Increments nextSessionId counter
-
-**Events**: Emits `NextSessionscheduled(caseId, sessionId, date)`
-
----
-
-##### `startSession()`
-**Signature**: `function startSession(uint256 _caseId) external onlyAssignedJudge(caseId)`
-
-**Purpose**: Mark start of court session
-
-**Access**: Only assigned judge
-
-**Parameters**:
-- `_caseId`: Case ID
-
-**Actions**:
-- Creates CurrSession entry
-- Records block.timestamp as startTimestamp
-- Sets ipfsCid and endTimestamp to defaults
-
----
-
-##### `endSession()`
-**Signature**: `function endSession(uint256 _caseId, string _ipfsCid, bool _isAdjourned) external onlyAssignedJudge(caseId)`
-
-**Purpose**: End court session and record proceedings
-
-**Access**: Only assigned judge
-
-**Parameters**:
-- `_caseId`: Case ID
-- `_ipfsCid`: IPFS hash of session transcript/recording
-- `_isAdjourned`: true if adjourned, false if concluded
-
-**Actions**:
-- Validates session was started
-- Records IPFS content hash
-- Sets endTimestamp to current block.timestamp
-- Records adjournment status
-
-**Events**: Emits `SessionPublished(caseId, sessionId, ipfsCid)`
-
----
-
-##### `setCaseStatus()`
-**Signature**: `function setCaseStatus(uint256 _caseId, CaseStatus _status) external onlyAssignedJudge(caseId)`
-
-**Purpose**: Update case status
-
-**Access**: Only assigned judge
-
-**Parameters**:
-- `_caseId`: Case ID
-- `_status`: New status (CREATED, PRE_TRIAL, IN_SESSION, CLOSED)
-
-**Events**: Emits `CaseStatusChanged(caseId, status)`
-
----
-
-#### Read Functions
-
-| Function | Returns | Purpose |
-|----------|---------|---------|
-| `getCaseSigners(uint256 _caseId)` | (clerk, judge, defence, prosecution) | Get all assigned participants |
-| `getAssignedJudge(uint256 _caseId)` | address | Get judge for case |
-| `isCaseActive(uint256 _caseId)` | bool | Check if case not CLOSED |
-| `getNextSessionDetails(uint256 _caseId)` | SessionDetails | Get upcoming session info |
-| `getSessionDetails(uint256 _caseId, uint256 _sessionId)` | CurrSession | Get past session details |
+4. Case Conclusion
+   └─ Multiple finalizeSession() calls until case resolved
+   └─ Case status changes to CLOSED
+```
 
 ---
 
-## 4. EvidenceStaging.sol
+## Cross-Contract Integration
 
-### Purpose
-Manages evidence collection, submission, and review during court proceedings. 
+### How Contracts Work Together
 
-### Key Structures
+```
+CourtAccessControl (Base Contract)
+  ↑
+  ├─ FIRRegistry (uses for police role checks)
+  ├─ CourtSession (uses for all role checks)
+  └─ All contracts check roles before allowing actions
 
-#### Submission Struct
+FIRRegistry (Police Records)
+  ↑
+  └─ CourtSession (reads FIR data when creating criminal cases)
 
-```solidity
-struct Submission {
-    uint256 id;           // Unique submission ID
-    uint256 caseId;       // Associated case ID
-    address uploader;     // Address of person submitting evidence
-    string cloudRef;      // Cloud storage reference (URL/CID)
-    bytes32 fileHash;     // Keccak256 hash of file for integrity
-    EvidenceType fileType;// DOCUMENT, AUDIO, or VIDEO
-    Status status;        // PENDING, ACCEPTED, or REJECTED
-    uint256 timestamp;    // Submission timestamp
-    string metaData;      // Additional metadata (JSON)
+CourtSession (Case Management)
+  ↑
+  └─ Central hub - coordinates with all other contracts
+```
+
+### Data Flow Example
+```
+1. Police files FIR → FIRRegistry
+2. Clerk creates case → CourtSession reads from FIRRegistry
+3. All role checks → CourtAccessControl
+4. Case proceedings → CourtSession
+5. Evidence storage → Links to IPFS/cloud storage
+```
+
+---
+
+## Security Features
+
+### Access Control
+- **Role-based permissions**: Only authorized users can perform actions
+- **Immutable records**: Once forwarded to court, FIRs cannot be changed
+- **Audit trail**: All actions emit events for transparency
+
+### Data Integrity
+- **Content hashes**: All documents verified with digital fingerprints
+- **IPFS integration**: Decentralized storage for court records
+- **Timestamp tracking**: All actions recorded with block timestamps
+
+### Event Logging
+Every important action emits an event:
+- `FIRFiled` - New FIR created
+- `CaseCreated` - New case started
+- `SessionPublished` - Court session completed
+- `JudgeAssigned` - Judge assigned to case
+- `LawyerAssigned` - Lawyer assigned to case
+
+---
+
+## Frontend Integration Guide
+
+### Basic Setup
+```javascript
+// Contract addresses (replace with your deployed addresses)
+const COURT_ACCESS_CONTROL = "0x123...";
+const FIR_REGISTRY = "0x456...";
+const COURT_SESSION = "0x789...";
+
+// Connect to contracts
+const accessControl = new ethers.Contract(COURT_ACCESS_CONTROL, accessControlABI, signer);
+const firRegistry = new ethers.Contract(FIR_REGISTRY, firRegistryABI, signer);
+const courtSession = new ethers.Contract(COURT_SESSION, courtSessionABI, signer);
+```
+
+### Common Patterns
+
+#### Check User Role
+```javascript
+const isJudge = await accessControl.isJudge(userAddress);
+const isLawyer = await accessControl.isLawyer(userAddress);
+const isPolice = await accessControl.isPolice(userAddress);
+```
+
+#### Handle Transactions
+```javascript
+try {
+    const tx = await courtSession.createCase(/* params */);
+    await tx.wait(); // Wait for confirmation
+    console.log("Case created successfully");
+} catch (error) {
+    console.error("Transaction failed:", error);
 }
 ```
 
-### Authorization Model
+#### Listen to Events
+```javascript
+// Listen for new cases
+courtSession.on("CaseCreated", (caseId, title, firId) => {
+    console.log(`New case: ${caseId} - ${title}`);
+    // Update UI
+});
 
-Evidence can be submitted by:
-1. **Lawyers**: Anyone with LAWYER_ROLE can submit evidence for any case
-2. **Registered Participants**: Witnesses or parties registered by clerk for a specific case
-
-### Functions
-
-#### Write Functions
-
-##### `registerCaseParticipants()`
-**Signature**: `function registerCaseParticipants(uint256 _caseId, address[] _subjects) external onlyClerk`
-
-**Purpose**: Register witnesses/parties who can submit evidence
-
-**Access**: Only CLERK_ROLE
-
-**Parameters**:
-- `_caseId`: Case ID
-- `_subjects`: Array of addresses to register
-
-**Actions**: Sets `registeredParticipants[_caseId][address] = true` for each subject
-
----
-
-##### `submitEvidence()`
-**Signature**: `function submitEvidence(uint256 _caseId, string _cloudRef, bytes32 _fileHash, EvidenceType _fileType, string _metaData, bytes _lawyerSignature) external`
-
-**Purpose**: Submit evidence for a case
-
-**Access**: Anyone (authorization checked within function)
-
-**Parameters**:
-- `_caseId`: Case ID
-- `_cloudRef`: Cloud storage reference (URL/IPFS CID)
-- `_fileHash`: File hash for integrity verification
-- `_fileType`: DOCUMENT (0), AUDIO (1), or VIDEO (2)
-- `_metaData`: JSON metadata about evidence
-- `_lawyerSignature`: Optional EIP-712 signature from lawyer for permission
-
-**Authorization**: Submission allowed if:
-- Submitter has LAWYER_ROLE, OR
-- Submitter is registered participant, OR
-- Valid lawyer signature provided
-
-**Actions**:
-- Creates new Submission with PENDING status
-- Records submitter, timestamp, and all metadata
-
-**Events**: Emits `EvidenceSubmitted(submissionId, caseId, fileHash)`
-
----
-
-##### `reviewSubmission()`
-**Signature**: `function reviewSubmission(uint256 _submissionId, bool _accepted) external onlyJudge`
-
-**Purpose**: Judge accepts or rejects submitted evidence
-
-**Access**: Only accounts with JUDGE_ROLE
-
-**Parameters**:
-- `_submissionId`: ID of submission to review
-- `_accepted`: true to accept, false to reject
-
-**Actions**:
-- Updates status to ACCEPTED or REJECTED
-- Evidence with ACCEPTED status can be used in trial
-
-**Events**: Emits `EvidenceReviewed(submissionId, status, judge)`
-
----
-
-#### Read Functions
-
-| Function | Returns | Purpose |
-|----------|---------|---------|
-| `submissions(uint256)` | Submission struct | Get evidence details |
-| `registeredParticipants(uint256, address)` | bool | Check if address registered for case |
-| `nonces(address)` | uint256 | Get signature nonce for account |
-
----
-
-## Cross-Contract Dependencies
-
-```
-CourtAccessControl
-  ↑
-  └─ Required by: FIRRegistry, CourtSession, EvidenceStaging
-
-FIRRegistry
-  ↑
-  └─ Required by: CourtSession (for case creation)
-
-CourtSession
-  ↑
-  ├─ Uses: CourtAccessControl (role checks)
-  ├─ Uses: FIRRegistry (fetch accused/filer)
-  └─ Referenced by: EvidenceStaging (case validation)
-
-EvidenceStaging
-  ↑
-  └─ Uses: CourtAccessControl (lawyer verification)
+// Listen for new FIRs
+firRegistry.on("FIRFiled", (firId, stationId, ipcSections) => {
+    console.log(`New FIR: ${firId} at ${stationId}`);
+    // Update UI
+});
 ```
 
 ---
 
-## Events Reference
+## Best Practices
 
-### FIRRegistry
-- `FIRFiled(uint256 indexed firId, string stationId, string[] ipcSections)`
-- `SupplementaryFiled(uint256 indexed firId, uint256 reportId)`
-- `FIRForwarded(uint256 indexed firId, uint256 caseId)`
+### For Developers
+1. **Always check roles** before performing actions
+2. **Handle transaction errors** gracefully
+3. **Use events** to update UI in real-time
+4. **Validate inputs** before sending transactions
+5. **Keep gas costs** in mind for complex operations
 
-### CourtSession
-- `CaseCreated(uint256 indexed caseId, string title, uint256 linkedFirId)`
-- `CaseStatusChanged(uint256 indexed caseId, CaseStatus status)`
-- `JudgeAssigned(uint256 indexed caseId, address judge)`
-- `LawyerAssigned(uint256 indexed caseId, address lawyer, string role)`
-- `NextSessionscheduled(uint256 indexed caseId, uint256 indexed sessionId, uint256 date)`
-- `SessionPublished(uint256 indexed caseId, uint256 indexed sessionId, string ipfsCid)`
+### For Court Staff
+1. **Double-check addresses** when assigning roles
+2. **Keep IPFS hashes** secure and accessible
+3. **Document metadata** should be well-structured JSON
+4. **Regular backups** of important documents
+5. **Follow proper judicial procedures** in the system
 
-### EvidenceStaging
-- `EvidenceSubmitted(uint256 indexed submissionId, uint256 indexed caseId, bytes32 fileHash)`
-- `EvidenceReviewed(uint256 indexed submissionId, Status status, address reviewedBy)`
+### For Police
+1. **File FIRs promptly** after crime reports
+2. **Add supplementary reports** before court forwarding
+3. **Maintain evidence links** for transparency
+4. **Ensure document integrity** with proper hashing
 
 ---
+
+## Troubleshooting
+
+### Common Issues
+
+#### "Only Clerk" Error
+- **Cause**: Non-clerk trying to perform clerk actions
+- **Solution**: Ensure user has CLERK_ROLE
+
+#### "FIR already exists" Error
+- **Cause**: Trying to create FIR with duplicate ID
+- **Solution**: Use unique FIR numbers
+
+#### "Cannot update after forwarding" Error
+- **Cause**: Trying to modify FIR after court creation
+- **Solution**: Make all changes before creating court case
+
+#### Gas Issues
+- **Cause**: Complex transactions with multiple operations
+- **Solution**: Break into smaller transactions or increase gas limit
+
+### Debug Tips
+1. **Check event logs** for transaction details
+2. **Verify role assignments** in CourtAccessControl
+3. **Confirm contract addresses** are correct
+4. **Use testnet** before mainnet deployment
+
+---
+
+## Conclusion
+
+These smart contracts provide a robust, transparent foundation for digital court proceedings. By combining role-based access control, immutable record-keeping, and decentralized storage, the NayaSutra system ensures judicial integrity while modernizing court operations.
+
+The modular design allows for future enhancements while maintaining backward compatibility, and the comprehensive event logging provides complete audit trails for all judicial activities.

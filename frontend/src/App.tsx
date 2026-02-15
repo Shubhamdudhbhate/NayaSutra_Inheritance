@@ -25,13 +25,11 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Courts from "./pages/Courts";
 import Sections from "./pages/Sections";
-import CaseBlocks from "./pages/CaseBlocks";
 import CaseDetails  from "./pages/CaseDetails";
 import CauseList from "./pages/CauseList";
 import JudgmentWriter from "./pages/JudgmentWriter";
 import EvidenceVault from "./pages/EvidenceVault";
 import CourtCalendar from "./pages/CourtCalendar";
-import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 import NewFIR from "./pages/NewFIR";
 import FIRDetails from "./pages/FIRDetails";
@@ -117,10 +115,8 @@ const routes: RouteObject[] = [
       { path: "/judgment-writer", element: <JudgmentWriter /> },
       { path: "/evidence-vault", element: <EvidenceVault /> },
       { path: "/court-calendar", element: <CourtCalendar /> },
-      { path: "/analytics", element: <Analytics /> },
       { path: "/courts", element: <Courts /> },
       { path: "/courts/:courtId/sections", element: <Sections /> },
-      { path: "/sections/:sectionId/blocks", element: <CaseBlocks /> },
       { path: "/cases/:id", element: <CaseDetails /> },
       { path: "/lawyer/today-cases", element: <TodayCases /> },
       { path: "/lawyer/case-repository", element: <CaseRepository /> },

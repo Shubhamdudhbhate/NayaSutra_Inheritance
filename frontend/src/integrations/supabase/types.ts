@@ -1331,7 +1331,7 @@ export const Constants = {
         "Witness Statement",
       ],
       permission_status: ["pending", "granted", "denied", "expired"],
-      session_status: ["active", "ended", "paused"],
+      session_status: ["active", "ended", "paused","scheduled"],
       uploader_role_type: ["POLICE", "LAWYER"],
       user_role_category: [
         "judge",

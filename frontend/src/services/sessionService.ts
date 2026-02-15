@@ -5,7 +5,7 @@ export interface SessionLog {
   id: string;
   case_id: string;
   judge_id: string;
-  status: "active" | "ended" | "paused";
+  status: "active" | "ended" | "paused" | "scheduled";
   started_at: string;
   ended_at: string | null;
   notes: string | null;
@@ -20,7 +20,8 @@ export const createSessionLog = async (
   caseId: string,
   judgeId: string,
   scheduledStartTime: string,
-  notes?: string
+  notes?: string,
+  status: "active" | "scheduled" = "active"
 ): Promise<SessionLog | null> => {
   try {
     const { data, error } = await supabase
@@ -28,7 +29,7 @@ export const createSessionLog = async (
       .insert({
         case_id: caseId,
         judge_id: judgeId,
-        status: "active",
+        status: status as any, // Type assertion to allow 'scheduled' status
         started_at: scheduledStartTime,
         notes: notes || "Session scheduled",
       })

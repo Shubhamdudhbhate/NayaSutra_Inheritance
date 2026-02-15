@@ -7,6 +7,7 @@ import { DashboardHeader } from "./DashboardHeader";
 import { CauseListItem, LiveCauseList } from "./LiveCauseList";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotificationAlerts } from "@/hooks/useNotificationAlerts";
 import { supabase } from "@/integrations/supabase/client";
 
 // Transform database cases to CauseListItem format
@@ -76,6 +77,14 @@ const transformCaseToCauseListItem = (
 export const JudiciaryDashboard = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  
+  // Real-time notification alerts (for popup toasts - badge is handled by DashboardHeader)
+  useNotificationAlerts({
+    userId: profile?.id,
+    enabled: true,
+    showToasts: true,
+  });
+  
   const [causeList, setCauseList] = useState<CauseListItem[]>([]);
   const [, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NyaySutraSidebar } from "@/components/dashboard/NyaySutraSidebar";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotificationAlerts } from "@/hooks/useNotificationAlerts";
 import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { CaseCardWithActions } from "@/components/cases/CaseCardWithActions";
@@ -21,6 +22,14 @@ type Case = {
 export default function TodayCases() {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  
+  // Real-time notification alerts
+  const { notificationCount, hasNewNotification } = useNotificationAlerts({
+    userId: profile?.id,
+    enabled: true,
+    showToasts: true,
+  });
+  
   const [cases, setCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -87,9 +96,16 @@ export default function TodayCases() {
               variant="ghost"
               size="sm"
               onClick={() => navigate("/lawyer/notifications")}
-              className="relative text-muted-foreground hover:text-foreground hover:bg-muted p-2"
+              className={`relative text-muted-foreground hover:text-foreground hover:bg-muted p-2 ${
+                hasNewNotification ? "animate-bounce" : ""
+              }`}
             >
-              <Bell className="w-5 h-5" />
+              <Bell className={`w-5 h-5 ${hasNewNotification ? "text-amber-400" : ""}`} />
+              {notificationCount > 0 && (
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-red-500 text-white animate-pulse">
+                  {notificationCount > 9 ? "9+" : notificationCount}
+                </Badge>
+              )}
             </Button>
           </div>
         </div>

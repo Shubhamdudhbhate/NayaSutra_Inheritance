@@ -85,7 +85,6 @@ export const NyaySutraSidebar = () => {
           icon: Calendar,
           path: "/court-calendar",
         },
-        { id: "analytics", label: "Analytics", icon: BarChart3, path: "/analytics" },
       ];
     }
   }, [currentUser]);
@@ -107,7 +106,6 @@ export const NyaySutraSidebar = () => {
         location.pathname.startsWith("/cases");
     }
     if (id === "calendar") return location.pathname === "/court-calendar";
-    if (id === "analytics") return location.pathname === "/analytics";
     if (id === "today-cases") return location.pathname === "/lawyer/today-cases";
     if (id === "case-repository") return location.pathname === "/lawyer/case-repository";
     return location.pathname === path;

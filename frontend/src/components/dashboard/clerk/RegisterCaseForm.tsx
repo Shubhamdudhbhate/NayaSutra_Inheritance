@@ -74,7 +74,7 @@ type VerifiedFIR = {
   blockchain_tx_hash?: string;
 };
 
-export const RegisterCaseForm = () => {
+export const RegisterCaseForm = ({ onCaseCreated }: { onCaseCreated?: (caseData: any) => void }) => {
   const { profile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
@@ -356,6 +356,19 @@ export const RegisterCaseForm = () => {
       }
 
       toast.success("Case Registered & Assignments Complete!");
+      
+      // Fetch the newly created case and redirect to CaseManagementPanel
+      const { data: newCase, error: fetchError } = await supabase
+        .from("cases")
+        .select("*")
+        .eq("case_number", caseId)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error("Error fetching newly created case:", fetchError);
+      } else if (newCase && onCaseCreated) {
+        onCaseCreated(newCase);
+      }
       
       reset();
       setVerifiedFir(null);

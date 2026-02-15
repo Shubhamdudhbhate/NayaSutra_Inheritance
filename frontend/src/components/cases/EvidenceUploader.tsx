@@ -7,7 +7,7 @@ import {
 } from '@/utils/storage/stagingUploadUtils'; // Ensure this matches your util filename
 
 // Icons (Lucide React)
-import { UploadCloud, FileType, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { UploadCloud, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 interface EvidenceUploaderProps {
   caseId: string;       // Passed from the URL (The specific case folder)

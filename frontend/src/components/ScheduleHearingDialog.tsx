@@ -122,7 +122,8 @@ export function ScheduleHearingDialog({
         caseId,
         profile.id,
         localDateTime,
-        notes || `Hearing scheduled for ${location}`
+        notes || `Hearing scheduled for ${location}`,
+        "scheduled" // Use 'scheduled' status for future sessions
       );
 
       if (!sessionLog) {
