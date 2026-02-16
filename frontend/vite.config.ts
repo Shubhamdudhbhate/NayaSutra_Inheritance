@@ -35,8 +35,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: [
       { find: "@", replacement: path.resolve(__dirname, "src") },
-      { find: "@/integrations/supabase/client", replacement: path.resolve(__dirname, "src/integrations/supabase/client.ts") },
-      { find: "@/integrations/supabase/types", replacement: path.resolve(__dirname, "src/integrations/supabase/types.ts") }
+      { find: "@/integrations/supabase", replacement: path.resolve(__dirname, "src/integrations/supabase/index.ts") }
     ],
     extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json']
   },

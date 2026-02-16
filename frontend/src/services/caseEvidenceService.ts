@@ -1,5 +1,7 @@
-import { supabase } from '@/integrations/supabase/client';
-import { EvidenceRecord } from '@/integrations/supabase/types';
+import { supabase, Database } from '@/integrations/supabase';
+
+// Create type alias for easier usage
+export type EvidenceRecord = Database['public']['Tables']['case_evidence']['Row'];
 
 /**
  * Evidence type for organizing different categories of evidence uploads
